@@ -13,7 +13,6 @@ const ACCEPTED =
   'text/plain';
 
 export default function Home() {
-  // Bug 7 / hydration fix: track client mount separately
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
@@ -27,7 +26,6 @@ export default function Home() {
   const { status: extractStatus, extract } = useDocumentExtractor();
   const tts = useTTS();
 
-  // Surface TTS errors into snackbar automatically
   useEffect(() => {
     if (tts.status === 'error' && tts.errorMsg) {
       showSnackbar(tts.errorMsg, 'error');
@@ -35,11 +33,9 @@ export default function Home() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tts.status, tts.errorMsg]);
 
-  // Bug 7 fix: stable ref to tts.stop so handleFile doesn't need tts in deps
   const ttsStopRef = useRef(tts.stop);
   useEffect(() => { ttsStopRef.current = tts.stop; }, [tts.stop]);
 
-  // ── Snackbar ──────────────────────────────────────────────────────────────
   const showSnackbar = useCallback(
     (message: string, type: SnackbarItem['type'] = 'default') => {
       setSnackbars((prev) => [
@@ -54,7 +50,6 @@ export default function Home() {
     setSnackbars((prev) => prev.filter((s) => s.id !== id));
   }, []);
 
-  // ── Copy extracted text ───────────────────────────────────────────────────
   const handleCopy = useCallback(async () => {
     if (!extractedText) return;
     try {
@@ -67,7 +62,6 @@ export default function Home() {
     }
   }, [extractedText, showSnackbar]);
 
-  // ── Download extracted text ───────────────────────────────────────────────
   const handleDownload = useCallback(() => {
     if (!extractedText || !selectedFile) return;
     const baseName = selectedFile.name.replace(/\.[^.]+$/, '');
@@ -83,7 +77,6 @@ export default function Home() {
     showSnackbar('Downloaded as .txt', 'success');
   }, [extractedText, selectedFile, showSnackbar]);
 
-  // ── File handling ─────────────────────────────────────────────────────────
   const handleFile = useCallback(
     async (file: File) => {
       const ext     = file.name.split('.').pop()?.toLowerCase() ?? '';
@@ -101,7 +94,7 @@ export default function Home() {
         return;
       }
 
-      ttsStopRef.current(); // stable ref — no dep needed
+      ttsStopRef.current(); 
       setSelectedFile(file);
       setExtractedText('');
       setCopied(false);
@@ -121,7 +114,7 @@ export default function Home() {
         showSnackbar(msg, 'error');
       }
     },
-    [extract, showSnackbar] // Bug 7 fix: tts not in deps
+    [extract, showSnackbar] 
   );
 
   const handleDrop = useCallback(
@@ -138,20 +131,17 @@ export default function Home() {
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (file) handleFile(file);
-      // Reset input so same file can be re-uploaded
       e.target.value = '';
     },
     [handleFile]
   );
 
-  // ── Derived state ─────────────────────────────────────────────────────────
   const isExtracting = extractStatus === 'extracting';
   const hasText      = extractedText.length > 0;
   const wordCount    = hasText
     ? extractedText.split(/\s+/).filter(Boolean).length
     : 0;
 
-  // ── TTS not supported (only after mount to avoid hydration mismatch) ───────
   if (mounted && !tts.isSupported) {
     return (
       <main className="min-h-screen p-6 max-w-2xl mx-auto flex flex-col items-center justify-center gap-4">
@@ -176,25 +166,31 @@ export default function Home() {
   return (
     <main className="min-h-screen p-4 md:p-8 max-w-2xl mx-auto flex flex-col gap-6 pb-28">
 
-      {/* ── Header ────────────────────────────────────────────────────── */}
-      <header className="text-center mt-6 mb-2">
-        <h1
-          className="md3-display-large mb-1"
-          style={{ color: 'var(--md-sys-color-primary)' }}
+      {/* ── Hero / Header ─────────────────────────────────────────────── */}
+      <header
+        className="md3-shape-xl p-8 mb-2 text-center flex flex-col items-center gap-3"
+        style={{
+          backgroundColor: 'var(--md-sys-color-primary-container)',
+          color: 'var(--md-sys-color-on-primary-container)',
+        }}
+      >
+        <div
+          className="p-3 md3-shape-full"
+          style={{
+            backgroundColor: 'var(--md-sys-color-primary)',
+            color: 'var(--md-sys-color-on-primary)',
+          }}
         >
-          Echo
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
+            <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
+          </svg>
+        </div>
+        <h1 className="md3-display-large" style={{ fontWeight: 500, letterSpacing: '-0.02em' }}>
+          Speech to Text
         </h1>
-        <p
-          className="md3-headline-medium"
-          style={{ color: 'var(--md-sys-color-on-surface-variant)' }}
-        >
-          Document Reader
-        </p>
-        <p
-          className="md3-body-medium mt-1"
-          style={{ color: 'var(--md-sys-color-on-surface-variant)' }}
-        >
-          Upload a PDF, DOCX, or TXT — your phone reads it aloud
+        <p className="md3-title-medium opacity-90 max-w-sm">
+          Listen to any PDF, DOCX, or TXT file offline on your device.
         </p>
       </header>
 
@@ -207,9 +203,9 @@ export default function Home() {
         onDragOver={(e)  => { e.preventDefault(); setIsDragging(true); }}
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
-        onClick={() => !isExtracting && inputRef.current?.click()}
-        onKeyDown={(e) => e.key === 'Enter' && !isExtracting && inputRef.current?.click()}
-        className="md3-shape-lg p-8 border-2 border-dashed flex flex-col items-center justify-center gap-3 cursor-pointer transition-all duration-200 select-none"
+        onClick={() => !isExtracting && !selectedFile && inputRef.current?.click()}
+        onKeyDown={(e) => e.key === 'Enter' && !isExtracting && !selectedFile && inputRef.current?.click()}
+        className="md3-shape-lg p-8 border-2 border-dashed flex flex-col items-center justify-center gap-4 transition-all duration-200"
         style={{
           borderColor: isDragging
             ? 'var(--md-sys-color-primary)'
@@ -220,6 +216,7 @@ export default function Home() {
             ? 'var(--md-sys-color-surface-container-low)'
             : 'transparent',
           minHeight: '160px',
+          cursor: selectedFile ? 'default' : 'pointer',
         }}
       >
         <input
@@ -235,20 +232,20 @@ export default function Home() {
         {isExtracting ? (
           <>
             <div
-              className="w-8 h-8 rounded-full border-2 animate-spin"
+              className="w-10 h-10 rounded-full border-[3px] animate-spin"
               style={{
                 borderColor: 'var(--md-sys-color-primary)',
                 borderTopColor: 'transparent',
               }}
             />
-            <p className="md3-title-medium" style={{ color: 'var(--md-sys-color-on-surface)' }}>
+            <p className="md3-title-medium mt-2" style={{ color: 'var(--md-sys-color-on-surface)' }}>
               Extracting text…
             </p>
           </>
         ) : selectedFile && hasText ? (
           <>
             <div
-              className="p-3 md3-shape-full"
+              className="p-4 md3-shape-full"
               style={{
                 backgroundColor: 'var(--md-sys-color-primary-container)',
                 color: 'var(--md-sys-color-on-primary-container)',
@@ -264,19 +261,42 @@ export default function Home() {
                 {selectedFile.name}
               </p>
               <p
-                className="md3-body-medium mt-0.5"
+                className="md3-body-medium mt-1"
                 style={{ color: 'var(--md-sys-color-on-surface-variant)' }}
               >
-                {wordCount.toLocaleString()} words · tap to change file
+                {wordCount.toLocaleString()} words loaded
               </p>
+            </div>
+            
+            <div className="flex gap-3 mt-2">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  inputRef.current?.click();
+                }}
+                className="md3-tonal-button px-5 h-10"
+              >
+                Change File
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedFile(null);
+                  setExtractedText('');
+                  ttsStopRef.current();
+                }}
+                className="md3-outlined-button px-5 h-10"
+              >
+                Clear
+              </button>
             </div>
           </>
         ) : (
           <>
             <div
-              className="p-3 md3-shape-full"
+              className="p-4 md3-shape-full"
               style={{
-                backgroundColor: 'var(--md-sys-color-surface-container)',
+                backgroundColor: 'var(--md-sys-color-surface-container-high)',
                 color: 'var(--md-sys-color-on-surface-variant)',
               }}
             >
@@ -288,12 +308,12 @@ export default function Home() {
             >
               {isDragging ? 'Drop file here' : 'Tap to upload a document'}
             </p>
-            <div className="flex gap-2 flex-wrap justify-center">
+            <div className="flex gap-2 flex-wrap justify-center mt-1">
               {['PDF', 'DOCX', 'TXT'].map((fmt) => (
                 <span
                   key={fmt}
                   className="md3-chip"
-                  style={{ fontSize: '0.75rem', height: '26px', padding: '0 10px' }}
+                  style={{ fontSize: '0.8rem', height: '28px', padding: '0 12px' }}
                 >
                   {fmt}
                 </span>
@@ -327,8 +347,6 @@ export default function Home() {
               >
                 {wordCount.toLocaleString()} words
               </span>
-
-              {/* Copy button */}
               <button
                 onClick={handleCopy}
                 title="Copy text"
@@ -337,8 +355,6 @@ export default function Home() {
               >
                 {copied ? <CheckIcon /> : <CopyIcon />}
               </button>
-
-              {/* Download button */}
               <button
                 onClick={handleDownload}
                 title="Download as .txt"
@@ -349,8 +365,6 @@ export default function Home() {
               </button>
             </div>
           </div>
-
-          {/* Scrollable text */}
           <div
             className="px-4 pb-4 md3-body-large overflow-y-auto"
             style={{
