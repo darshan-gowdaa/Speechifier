@@ -6,7 +6,7 @@ import { useTTS } from '../hooks/useTTS';
 import { TTSControls } from '../components/TTSControls';
 import { SpeakingBlob } from '../components/SpeakingBlob';
 import { Snackbar, type SnackbarItem } from '../components/Snackbar';
-
+import Strands from '../components/Strands';
 const ACCEPTED =
   '.pdf,.docx,.txt,' +
   'application/pdf,' +
@@ -165,21 +165,35 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen p-4 md:p-8 max-w-2xl mx-auto flex flex-col gap-6 pb-28">
+    <main className="min-h-screen relative flex flex-col items-center overflow-x-hidden">
+      
+      {/* ── Background Animations ─────────────────────────────────────── */}
+      <div className="absolute inset-0 -z-10 w-full h-full">
+        <Strands 
+          thickness={1} 
+          glow={3} 
+          amplitude={1} 
+          speed={0.4} 
+          waviness={1}
+          colors={['#006495', '#CBE6FF', '#50606E']} 
+        />
+      </div>
 
+      <div className="w-full p-4 md:p-8 max-w-3xl mx-auto flex flex-col gap-6 pb-28 relative z-10">
       {/* ── Hero / Header ─────────────────────────────────────────────── */}
       <header
-        className="md3-shape-xl p-8 mb-2 text-center flex flex-col items-center gap-3"
+        className="md3-shape-expressive-xl p-10 mb-4 text-center flex flex-col items-center gap-4 transition-all"
         style={{
           backgroundColor: 'var(--md-sys-color-primary-container)',
           color: 'var(--md-sys-color-on-primary-container)',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.05)',
         }}
       >
         <SpeakingBlob status={tts.status} pitch={tts.pitch} rate={tts.rate} />
-        <h1 className="md3-display-large" style={{ fontWeight: 500, letterSpacing: '-0.02em' }}>
+        <h1 className="md3-display-medium mt-2">
           Speech to Text
         </h1>
-        <p className="md3-title-medium opacity-90 max-w-sm">
+        <p className="md3-title-medium opacity-80 max-w-sm">
           Listen to any PDF, DOCX, or TXT file offline on your device.
         </p>
       </header>
@@ -195,18 +209,21 @@ export default function Home() {
         onDrop={handleDrop}
         onClick={() => !isExtracting && !selectedFile && inputRef.current?.click()}
         onKeyDown={(e) => e.key === 'Enter' && !isExtracting && !selectedFile && inputRef.current?.click()}
-        className="md3-shape-lg p-8 border-2 border-dashed flex flex-col items-center justify-center gap-4 transition-all duration-200"
+        className="md3-shape-expressive-lg p-10 flex flex-col items-center justify-center gap-4 transition-all"
         style={{
-          borderColor: isDragging
-            ? 'var(--md-sys-color-primary)'
-            : 'var(--md-sys-color-outline-variant)',
+          border: isDragging
+            ? '2px dashed var(--md-sys-color-primary)'
+            : selectedFile 
+            ? '2px solid transparent'
+            : '2px dashed var(--md-sys-color-outline-variant)',
           backgroundColor: isDragging
             ? 'var(--md-sys-color-primary-container)'
             : selectedFile
             ? 'var(--md-sys-color-surface-container-low)'
-            : 'transparent',
-          minHeight: '160px',
+            : 'var(--md-sys-color-surface-container-lowest)',
+          minHeight: '200px',
           cursor: selectedFile ? 'default' : 'pointer',
+          boxShadow: selectedFile ? '0 4px 16px rgba(0,0,0,0.03)' : 'none',
         }}
       >
         <input
@@ -316,10 +333,10 @@ export default function Home() {
       {/* ── Text preview ──────────────────────────────────────────────── */}
       {hasText && (
         <div
-          className="md3-shape-lg border"
+          className="md3-shape-expressive-md"
           style={{
-            backgroundColor: 'var(--md-sys-color-surface-container-low)',
-            borderColor: 'var(--md-sys-color-outline-variant)',
+            backgroundColor: 'var(--md-sys-color-surface-container)',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
           }}
         >
           {/* Header row */}
@@ -399,6 +416,7 @@ export default function Home() {
           onDismiss={dismissSnackbar}
         />
       ))}
+      </div>
     </main>
   );
 }

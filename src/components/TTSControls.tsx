@@ -51,12 +51,13 @@ export function TTSControls({
 
   return (
     <div
-      className="md3-shape-lg p-5 border flex flex-col gap-5"
+      className="md3-shape-expressive-lg p-6 flex flex-col gap-6"
       style={{
         backgroundColor: 'var(--md-sys-color-surface-container)',
-        borderColor: isError
-          ? 'var(--md-sys-color-error)'
-          : 'var(--md-sys-color-outline-variant)',
+        border: isError
+          ? '1px solid var(--md-sys-color-error)'
+          : '1px solid var(--md-sys-color-outline-variant)',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
       }}
     >
       {/* ── Error banner ─────────────────────────────────────────────── */}
@@ -187,12 +188,13 @@ export function TTSControls({
             value={selectedVoiceURI}
             onChange={(e) => onVoiceChange(e.target.value)}
             disabled={voices.length === 0}
-            className="md3-shape-sm md3-body-medium px-3 py-2 border outline-none truncate"
+            className="md3-shape-expressive-sm md3-body-medium px-4 py-3 border outline-none truncate"
             style={{
               backgroundColor: 'var(--md-sys-color-surface-container-low)',
-              borderColor: 'var(--md-sys-color-outline)',
+              borderColor: 'var(--md-sys-color-outline-variant)',
               color: 'var(--md-sys-color-on-surface)',
-              opacity: voices.length === 0 ? 0.7 : 1
+              opacity: voices.length === 0 ? 0.7 : 1,
+              transition: 'border-color 0.2s ease',
             }}
           >
             {voices.length === 0 ? (

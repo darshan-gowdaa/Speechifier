@@ -78,20 +78,20 @@ export function Snackbar({ item, stackOffset, onDismiss, actionLabel, onAction }
         transform: 'translateX(-50%)',
         zIndex: 50,
         width: 'min(calc(100vw - 32px), 480px)',
-        animation: 'snackbar-in 0.3s cubic-bezier(0.2, 0, 0, 1.0) both',
+        animation: 'snackbar-in var(--md-sys-motion-duration-long) var(--md-sys-motion-easing-expressive) both',
       }}
     >
       <div
         style={{
           backgroundColor: bg,
           color: fg,
-          borderRadius: '12px',
-          padding: '12px 16px',
+          borderRadius: '24px 8px 24px 8px', // Expressive shape
+          padding: '16px 20px', // slightly more padding for expressive feel
           display: 'flex',
           alignItems: 'center',
           gap: '12px',
-          boxShadow: '0px 4px 8px 3px rgba(0,0,0,0.15), 0px 1px 3px rgba(0,0,0,0.3)',
-          minHeight: '52px',
+          boxShadow: '0px 8px 24px rgba(0,0,0,0.12), 0px 2px 6px rgba(0,0,0,0.08)',
+          minHeight: '60px',
         }}
       >
         <span style={{ flexShrink: 0 }}>{icon}</span>
