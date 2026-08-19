@@ -9,8 +9,8 @@ const roboto = Roboto({
 });
 
 export const metadata: Metadata = {
-  title: "Echo — Speech to Text",
-  description: "Local AI transcription powered by Whisper",
+  title: "Echo — Document Reader",
+  description: "Upload a PDF, DOCX, or TXT and have it read aloud. Runs entirely in your browser.",
 };
 
 export default function RootLayout({
