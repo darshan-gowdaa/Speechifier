@@ -1,217 +1,264 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
-import { useDocumentExtractor } from "../hooks/useDocumentExtractor";
-import { useTTS } from "../hooks/useTTS";
-import { M3LoadingIndicator } from "@alerix/m3-loading-indicator/react";
-import { 
-  RiUploadCloud2Line, RiFileTextLine, RiFileCopyLine, RiCheckLine, 
-  RiDownloadLine, RiPlayFill, RiPauseFill, RiStopFill, RiRefreshLine
-} from "@remixicon/react";
+import { useState, useEffect, useRef } from "react";
+import { Inter, Instrument_Serif } from "next/font/google";
+import { useDocumentExtractor } from "@/hooks/useDocumentExtractor";
+import { useTTS } from "@/hooks/useTTS";
+import { StrandsVisualizer } from "@/components/atoms/Visualizer";
+import { RiGithubFill, RiSpeakFill, RiPlayLine, RiPauseLine, RiStopLine, RiSpeedUpLine, RiVoiceprintLine, RiVoiceRecognitionLine, RiTimerLine } from "@remixicon/react";
+
+
+const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600", "700"] });
+const instrument = Instrument_Serif({ subsets: ["latin"], weight: "400", style: "italic" });
 
 const ACCEPTED = ".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain";
 
 export default function Home() {
   const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
+  const [menuOpen, setMenuOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [extractedText, setExtractedText] = useState("");
   const [isDragging, setIsDragging] = useState(false);
-  const [copied, setCopied] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const { status: extractStatus, extract } = useDocumentExtractor();
+  const { status: extractStatus, error: extractError, extract } = useDocumentExtractor();
   const tts = useTTS();
-
   const isExtracting = extractStatus === "extracting";
   const hasText = extractedText.length > 0;
-  const wordCount = hasText ? extractedText.split(/\s+/).filter(Boolean).length : 0;
 
-  const handleCopy = async () => {
-    if (!extractedText) return;
-    try {
-      await navigator.clipboard.writeText(extractedText);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {}
-  };
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => setMounted(true), []);
 
-  const handleDownload = () => {
-    if (!extractedText || !selectedFile) return;
-    const blob = new Blob([extractedText], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${selectedFile.name.replace(/\.[^.]+$/, "")}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
+  useEffect(() => {
+    if (menuOpen) document.body.classList.add('menu-open');
+    else document.body.classList.remove('menu-open');
+  }, [menuOpen]);
+
+  useEffect(() => {
+    const appears = document.querySelectorAll('.appear, .badge-star, h1 em');
+    const handleEnd = (e: Event) => (e.target as Element).classList.add('is-in');
+    appears.forEach(el => el.addEventListener('animationend', handleEnd, { once: true }));
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const isRunning = Array.from(appears).some(el => el.getAnimations().some(a => a.playState === 'running' || a.playState === 'finished'));
+        if (!isRunning) document.querySelectorAll('.appear, .hero-photo, .badge-star, h1 em').forEach(el => el.classList.add('is-in'));
+      });
+    });
+
+    const handleResize = () => { if (window.innerWidth >= 901) setMenuOpen(false); };
+    window.addEventListener('resize', handleResize);
+    return () => {
+      appears.forEach(el => el.removeEventListener('animationend', handleEnd));
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false);
+      // play pause with spacebar
+      if (e.key === ' ' && e.target === document.body && hasText) {
+        e.preventDefault();
+        if (tts.status === 'playing') tts.pause();
+        else if (tts.status === 'paused') tts.resume();
+        else if (tts.status === 'idle') tts.speak(extractedText);
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [menuOpen, hasText, tts, extractedText]);
 
   const handleFile = async (file: File) => {
     if (file.size > 50 * 1024 * 1024) return;
     tts.stop();
     setSelectedFile(file);
     setExtractedText("");
-    setCopied(false);
     try {
       const text = await extract(file);
       setExtractedText(text);
+      tts.speak(text);
     } catch {}
   };
 
-  if (mounted && !tts.isSupported) {
-    return (
-      <main className="min-h-screen flex items-center justify-center p-6">
-        <div className="m3-shape-lg p-6 m3-error max-w-sm text-center">
-          <p className="font-bold mb-2">TTS Not Supported</p>
-          <p className="text-sm opacity-80">Use Chrome or Edge.</p>
-        </div>
-      </main>
-    );
-  }
+  if (!mounted) return null;
 
   return (
-    <main className="min-h-screen p-4 md:p-12 max-w-4xl mx-auto flex flex-col gap-8">
-      {/* Hero */}
-      <header className="text-center py-12 m3-shape-xl bg-indigo-50 dark:bg-zinc-900 shadow-sm border border-indigo-100 dark:border-zinc-800 transition-all">
-        <h1 className="text-5xl md:text-7xl font-extrabold tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-indigo-500 to-rose-400 mb-4">
-          Speechifier
-        </h1>
-        <p className="text-lg md:text-xl text-zinc-600 dark:text-zinc-400 font-medium tracking-tight">
-          Listen to PDF, DOCX, or TXT offline.
-        </p>
-      </header>
-
-      {/* Upload Zone */}
-      <div
-        role="button"
-        tabIndex={0}
-        onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-        onDragLeave={() => setIsDragging(false)}
-        onDrop={(e) => { e.preventDefault(); setIsDragging(false); const f = e.dataTransfer.files?.[0]; if (f) handleFile(f); }}
-        onClick={() => !isExtracting && !selectedFile && inputRef.current?.click()}
-        className={`m3-shape-xl p-12 flex flex-col items-center justify-center gap-6 transition-all duration-500 cursor-pointer border-2
-          ${isDragging ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-950/20 scale-[1.02]" : selectedFile ? "border-transparent m3-surface-high cursor-default" : "border-dashed border-zinc-300 dark:border-zinc-700 m3-surface-low hover:border-indigo-400"}
-        `}
-      >
-        <input ref={inputRef} type="file" accept={ACCEPTED} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if(f) handleFile(f); e.target.value=""; }} disabled={isExtracting} />
-        
-        {isExtracting ? (
-          <div className="flex flex-col items-center gap-4">
-            <M3LoadingIndicator size={64} color="#6366f1" />
-            <p className="text-indigo-600 dark:text-indigo-400 font-bold tracking-wide animate-pulse">Extracting...</p>
-          </div>
-        ) : selectedFile && hasText ? (
-          <div className="flex flex-col items-center gap-4 w-full">
-            <div className="p-5 rounded-[24px] bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400">
-              <RiFileTextLine size={48} />
-            </div>
-            <div className="text-center">
-              <p className="text-xl font-bold text-zinc-900 dark:text-zinc-100 max-w-sm truncate">{selectedFile.name}</p>
-              <p className="text-zinc-500 mt-1 font-medium">{wordCount.toLocaleString()} words</p>
-            </div>
-            <div className="flex gap-4 mt-4">
-              <button onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }} className="px-6 py-3 m3-shape-full m3-secondary font-bold">Change</button>
-              <button onClick={(e) => { e.stopPropagation(); setSelectedFile(null); setExtractedText(""); tts.stop(); }} className="px-6 py-3 m3-shape-full m3-surface-low border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-800 font-bold transition-colors">Clear</button>
-            </div>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center gap-4 text-zinc-500 dark:text-zinc-400">
-            <RiUploadCloud2Line size={56} className="text-indigo-400" />
-            <p className="text-xl font-bold text-zinc-700 dark:text-zinc-300">Drop document or browse</p>
-            <div className="flex gap-2">
-              {["PDF", "DOCX", "TXT"].map(ext => (
-                <span key={ext} className="px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-full bg-zinc-200 dark:bg-zinc-800">{ext}</span>
-              ))}
-            </div>
-          </div>
-        )}
+    <div
+      className={`vesper-root ${inter.className}`}
+      onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+      onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
+      onDrop={(e) => { e.preventDefault(); setIsDragging(false); const f = e.dataTransfer.files?.[0]; if(f) handleFile(f); }}
+    >
+      <div className="grain"></div>
+      <div className={`hero-video-wrapper transition-opacity duration-300 ${isDragging ? 'opacity-30' : 'opacity-100'}`}>
+        <video className="hero-photo anim-fade-in" autoPlay loop muted playsInline>
+          <source src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260813_115057_94c3699b-0fd1-4124-bcf3-3626bb8c1f77.mp4" type="video/mp4" />
+        </video>
       </div>
 
-      {/* TTS Controls & Preview */}
-      {hasText && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {/* Controls */}
-          <div className="m3-shape-xl m3-surface-high p-8 flex flex-col gap-8">
-            <div className="flex justify-between items-center">
-              <h2 className="text-2xl font-extrabold tracking-tight">Playback</h2>
-              <span className={`px-3 py-1 text-sm font-bold uppercase tracking-wider rounded-full ${tts.status === 'playing' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400'}`}>
-                {tts.status}
-              </span>
-            </div>
-
-            <div className="flex gap-4 flex-wrap">
-              {(tts.status === 'idle' || tts.status === 'error' || tts.status === 'done') && (
-                <button onClick={() => tts.speak(extractedText)} className="flex-1 m3-primary m3-shape-full py-4 flex items-center justify-center gap-2 font-bold text-lg">
-                  <RiPlayFill size={24} /> Play
-                </button>
-              )}
-              {tts.status === 'playing' && (
-                <button onClick={tts.pause} className="flex-1 m3-secondary m3-shape-full py-4 flex items-center justify-center gap-2 font-bold text-lg">
-                  <RiPauseFill size={24} /> Pause
-                </button>
-              )}
-              {tts.status === 'paused' && (
-                <button onClick={tts.resume} className="flex-1 m3-primary m3-shape-full py-4 flex items-center justify-center gap-2 font-bold text-lg">
-                  <RiPlayFill size={24} /> Resume
-                </button>
-              )}
-              {(tts.status === 'playing' || tts.status === 'paused') && (
-                <button onClick={tts.stop} className="px-6 m3-surface-low border border-zinc-200 dark:border-zinc-700 m3-shape-full flex items-center justify-center hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors">
-                  <RiStopFill size={24} className="text-rose-500" />
-                </button>
-              )}
-            </div>
-
-            {/* Sliders */}
-            <div className="space-y-6">
-              <div>
-                <div className="flex justify-between text-sm font-bold text-zinc-600 dark:text-zinc-400 mb-2 uppercase tracking-wide">
-                  <span>Speed</span>
-                  <span className="text-indigo-500">{tts.rate.toFixed(1)}x</span>
-                </div>
-                <input type="range" min={0.5} max={2} step={0.1} value={tts.rate} onChange={(e) => tts.setRate(parseFloat(e.target.value))} className="w-full accent-indigo-500" />
-              </div>
-              <div>
-                <div className="flex justify-between text-sm font-bold text-zinc-600 dark:text-zinc-400 mb-2 uppercase tracking-wide">
-                  <span>Pitch</span>
-                  <span className="text-indigo-500">{tts.pitch.toFixed(1)}</span>
-                </div>
-                <input type="range" min={0.5} max={2} step={0.1} value={tts.pitch} onChange={(e) => tts.setPitch(parseFloat(e.target.value))} className="w-full accent-indigo-500" />
-              </div>
-            </div>
-
-            {/* Voice Select */}
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-bold text-zinc-600 dark:text-zinc-400 uppercase tracking-wide">Voice</label>
-              <select value={tts.selectedVoiceURI} onChange={(e) => tts.setSelectedVoiceURI(e.target.value)} className="m3-shape-lg bg-zinc-100 dark:bg-zinc-800 p-4 font-medium outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow">
-                {tts.voices.length === 0 ? <option value="">System Default</option> : tts.voices.map(v => <option key={v.voiceURI} value={v.voiceURI}>{v.name} ({v.lang})</option>)}
-              </select>
-            </div>
+      <div className="page">
+        <div className="menu-backdrop"></div>
+        <header className="vesper-header">
+          <div className="logo appear appear--scale" aria-label="Speechifier" style={{ "--d": "0.08s" } as React.CSSProperties}>
+            <RiSpeakFill />
+            <span>Speechifier</span>
           </div>
 
-          {/* Text Preview */}
-          <div className="m3-shape-xl m3-surface-high p-8 flex flex-col max-h-[600px]">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-extrabold tracking-tight">Text</h2>
-              <div className="flex gap-2">
-                <button onClick={handleCopy} className="p-2 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors" title="Copy">
-                  {copied ? <RiCheckLine className="text-emerald-500" /> : <RiFileCopyLine />}
-                </button>
-                <button onClick={handleDownload} className="p-2 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors" title="Download">
-                  <RiDownloadLine />
-                </button>
+          <nav id="site-nav" aria-label="Primary">
+            <a href="https://github.com/darshan-gowdaa" target="_blank" rel="noopener noreferrer" className="nav-link appear appear--scale" style={{ "--d": "0.2s" } as React.CSSProperties}>
+              <RiGithubFill size={18} className="mr-2" />
+              By @darshan-gowdaa
+            </a>
+          </nav>
+
+          <button onClick={() => inputRef.current?.click()} className="v-btn bg-white text-black hover:bg-gray-200 transition-colors header-cta appear appear--scale" style={{ "--d": "0.34s" } as React.CSSProperties}>Upload</button>
+
+          <button className="burger appear appear--scale" aria-expanded={menuOpen} style={{ "--d": "0.34s" } as React.CSSProperties} onClick={() => setMenuOpen(!menuOpen)}>
+            <span></span><span></span><span></span>
+          </button>
+        </header>
+
+        <main className="v-hero" id="top">
+          <div className="hero-copy">
+            <div
+              className={`w-full overflow-hidden transition-all ease-out ${selectedFile ? 'max-h-0 opacity-0 duration-300' : 'max-h-[420px] opacity-100 duration-500 delay-100'}`}
+              aria-hidden={!!selectedFile}
+            >
+              <div className="badge appear appear--pop" style={{ "--d": "0.22s" } as React.CSSProperties}>
+                Offline Text to Speech
               </div>
+
+              <h1>
+                <span className="headline-line"><span className="appear appear--mask" style={{ "--d": "0.42s" } as React.CSSProperties}>Listen to any <em className={`appear ${instrument.className}`} style={{ "--d": "0.72s" } as React.CSSProperties}>document</em></span></span>
+                <span className="headline-line"><span className="appear appear--mask" style={{ "--d": "0.62s" } as React.CSSProperties}>offline in seconds.</span></span>
+              </h1>
+
+              <p className="lede appear appear--soft text-center mx-auto [text-shadow:_0_2px_10px_rgb(0_0_0_/_80%)]" style={{ "--d": "0.82s", animationDuration: "1.25s" } as React.CSSProperties}>
+                Drop your PDF, DOCX, or TXT files and immediately turn them into natural-sounding speech right in your browser.
+              </p>
             </div>
-            <div className="overflow-y-auto text-lg leading-relaxed text-zinc-700 dark:text-zinc-300 font-medium p-4 bg-zinc-50 dark:bg-zinc-900/50 m3-shape-lg flex-1 whitespace-pre-wrap">
-              {extractedText}
+
+            <div className={`appear appear--soft w-full px-4 md:px-8 relative z-50 opacity-100 transition-all duration-500 mx-auto ${selectedFile ? 'max-w-[860px] mt-4' : 'max-w-[440px] mt-10'}`} style={{ "--d": "0.96s" } as React.CSSProperties}>
+              {!tts.isSupported ? (
+                <div className="p-6 bg-red-500/10 text-red-400 rounded-xl border border-red-500/20">
+                  TTS is not supported in this browser. Please use Chrome, Edge, or Safari.
+                </div>
+              ) : (
+                <>
+                  <input ref={inputRef} type="file" accept={ACCEPTED} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if(f) handleFile(f); e.target.value=""; }} disabled={isExtracting} />
+
+                  {!selectedFile ? (
+                <button
+                  onClick={() => inputRef.current?.click()}
+                  className={`v-btn w-full h-14 text-[15px] font-medium rounded-xl bg-white text-black z-50 shadow-[0_4px_24px_rgba(255,255,255,0.2)] hover:bg-gray-100 transition-colors ${isDragging ? 'border-2 border-dashed border-white' : ''}`}
+                >
+                  {isExtracting ? 'Extracting...' : isDragging ? 'Drop file here' : 'Upload Document'}
+                </button>
+              ) : (
+                <div className="w-full bg-black/60 backdrop-blur-xl rounded-[28px] border border-white/10 p-6 md:p-8 flex flex-col relative shadow-2xl">
+                  <div className="flex justify-between items-center gap-4 mb-5 text-left">
+                    <div className="overflow-hidden">
+                      <div className="font-semibold text-white text-xl whitespace-nowrap overflow-hidden text-ellipsis">{selectedFile.name}</div>
+                      <div className="text-white/60 text-[15px] mt-1.5 flex items-center gap-2">
+                        {isExtracting ? 'Reading file...' : tts.status === 'playing' ? 'Playing' : tts.status} (Space to pause)
+                      </div>
+                    </div>
+                    <button onClick={() => { setSelectedFile(null); setExtractedText(""); tts.stop(); }} className="v-btn btn-ghost-hero h-10 px-4 text-[15px] flex-shrink-0">Clear</button>
+                  </div>
+
+                  {isExtracting ? (
+                    <div className="flex-1 flex items-center justify-center min-h-[200px]">
+                      <span className="appear text-white/60 text-lg flex items-center gap-2">
+                        <RiTimerLine size={20} className="animate-spin" /> Extracting text...
+                      </span>
+                    </div>
+                  ) : extractStatus === 'error' ? (
+                    <div className="flex-1 flex flex-col items-center justify-center gap-4 min-h-[200px]">
+                      <span className="text-red-400 font-medium text-lg">{extractError || 'Failed to extract text. Please ensure it is a valid PDF or DOCX file.'}</span>
+                    </div>
+                  ) : hasText ? (
+                    <div className="flex flex-col flex-1 gap-5">
+                      <StrandsVisualizer
+                        isActive={tts.status === 'playing'}
+                        currentWord={tts.currentWord}
+                        pitch={tts.pitch}
+                        rate={tts.rate}
+                      />
+                      <div className="flex flex-wrap gap-3">
+                        {tts.status === 'playing' ? (
+                          <button onClick={tts.pause} className="v-btn bg-white text-black hover:bg-gray-200 transition-colors flex-[1_1_120px] h-12 text-[16px] flex items-center justify-center gap-2">
+                            <RiPauseLine size={20} /> Pause
+                          </button>
+                        ) : (
+                          <button onClick={() => tts.status === 'paused' ? tts.resume() : tts.speak(extractedText)} className="v-btn bg-white text-black hover:bg-gray-200 transition-colors flex-[1_1_120px] h-12 text-[16px] flex items-center justify-center gap-2">
+                            <RiPlayLine size={20} /> Play
+                          </button>
+                        )}
+                        <button onClick={tts.stop} className="v-btn btn-ghost-hero flex-[1_1_120px] h-12 text-[16px] flex items-center justify-center gap-2">
+                          <RiStopLine size={20} /> Stop
+                        </button>
+                      </div>
+
+                      <div className="flex flex-col gap-5">
+                        <div>
+                          <div className="flex justify-between text-[13px] text-white/60 mb-3 uppercase tracking-wide font-medium">
+                            <span className="flex items-center gap-1.5"><RiTimerLine size={16} /> Progress</span>
+                            <span>{tts.progress}%</span>
+                          </div>
+                          <input type="range" min="0" max="100" value={tts.progress} onChange={(e) => tts.seek(Number(e.target.value))} className="w-full accent-white cursor-grab active:cursor-grabbing transition-all hover:scale-[1.01]" />
+                        </div>
+
+                        <div className="flex flex-wrap gap-x-6 gap-y-5">
+                          <div className="flex-[1_1_140px]">
+                            <div className="flex justify-between text-[13px] text-white/60 mb-3 uppercase tracking-wide font-medium">
+                              <span className="flex items-center gap-1.5"><RiSpeedUpLine size={16} /> Speed</span>
+                              <span>{tts.rate.toFixed(1)}x</span>
+                            </div>
+                            <input type="range" min="0.5" max="2" step="0.1" value={tts.rate} onChange={(e) => tts.setRate(Number(e.target.value))} className="w-full accent-white cursor-grab active:cursor-grabbing transition-all hover:scale-[1.01]" />
+                          </div>
+                          <div className="flex-[1_1_140px]">
+                            <div className="flex justify-between text-[13px] text-white/60 mb-3 uppercase tracking-wide font-medium">
+                              <span className="flex items-center gap-1.5"><RiVoiceprintLine size={16} /> Pitch</span>
+                              <span>{tts.pitch.toFixed(1)}</span>
+                            </div>
+                            <input type="range" min="0.5" max="2" step="0.1" value={tts.pitch} onChange={(e) => tts.setPitch(Number(e.target.value))} className="w-full accent-white cursor-grab active:cursor-grabbing transition-all hover:scale-[1.01]" />
+                          </div>
+                        </div>
+
+                        <div>
+                           <div className="text-[13px] text-white/60 mb-3 uppercase tracking-wide font-medium text-left flex items-center gap-1.5">
+                             <RiVoiceRecognitionLine size={16} /> Voice
+                           </div>
+                           <select value={tts.selectedVoiceURI} onChange={(e) => tts.setSelectedVoiceURI(e.target.value)} className="w-full bg-black/40 border border-white/10 text-white p-3.5 rounded-xl outline-none cursor-pointer hover:border-white/20 transition-colors text-[15px] shadow-inner">
+                             {tts.voices.map(v => <option key={v.voiceURI} value={v.voiceURI} className="bg-[#111]">{v.name}</option>)}
+                           </select>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+                </>
+              )}
             </div>
           </div>
+        </main>
+
+        <div className="footer-wrapper">
+          <footer className="stats">
+            <div className="stat appear appear--stat" style={{ "--d": "1.12s" } as React.CSSProperties}>
+              100% local processing
+            </div>
+            <div className="stat appear appear--stat" style={{ "--d": "1.28s" } as React.CSSProperties}>
+              No cloud required
+            </div>
+            <div className="stat appear appear--stat" style={{ "--d": "1.44s" } as React.CSSProperties}>
+              Multiple voices & speeds
+            </div>
+          </footer>
         </div>
-      )}
-    </main>
+      </div>
+    </div>
   );
 }
