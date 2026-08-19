@@ -1,112 +1,125 @@
 <div align="center">
   <h1>
-    <img src="public/favicon.ico" height="32" alt="Speechifier Logo" />
     Speechifier
   </h1>
   <h3>Offline Text to Speech Reader</h3>
 
   <p>
-    A high-performance offline document reader that extracts text from PDFs and Word documents and converts it into natural-sounding speech right in the browser.
+    High-performance offline document reader. Extracts text from PDFs and Word docs, converts to natural speech, right in browser.
     <br />
     <br />
     <strong>
-    Vercel Deployment:
-    <a href="https://speechifier-app.vercel.app/"><strong>View Live Website »</strong></a>
+    <a href="https://speechifier-app.vercel.app/"><strong>View Live Demo »</strong></a>
     </strong>
   </p>
 </div>
 
----
-
 <div align="center">
-Built with Next.js and the native Web Speech API
+Built with Next.js and native Web Speech API <br /> <br />
 </div>
-
----
 
 <div align="center">
 
 ![Next.js](https://img.shields.io/badge/next.js-%23000000.svg?style=for-the-badge&logo=next.js&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/typescript-%23007ACC.svg?style=for-the-badge&logo=typescript&logoColor=white)
 ![TailwindCSS](https://img.shields.io/badge/tailwindcss-%2338B2AC.svg?style=for-the-badge&logo=tailwind-css&logoColor=white)
+![License](https://img.shields.io/badge/license-MIT-green.svg?style=for-the-badge)
+![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=for-the-badge)
 
+</div>
+
+---
+
+<br />
+
+<div align="center">
+  <img width="800" alt="Speechifier app screenshot" src="https://github.com/user-attachments/assets/99e47dfa-13a5-4a25-90ca-34440d9997b4" />
+  <br />
+  <br />
+  <img width="500" alt="Speechifier demo" src="https://github.com/user-attachments/assets/1a664258-563b-416e-ae0b-5a386d2bae0e" />
 </div>
 
 <br />
 
+## Table of Contents
+- [About](#about-the-project)
+- [Features](#key-features)
+- [How It Works](#how-it-works)
+- [Tech Stack](#tech-stack--architecture)
+- [Getting Started](#getting-started)
+---
+
 # About The Project
 
-Speechifier is a modern, privacy-focused text-to-speech application. It leverages the native Web Speech API to process documents locally, ensuring data never leaves the device. 
+Speechifier: modern, privacy-focused text-to-speech app. Leverages native Web Speech API, processes documents locally — data never leaves device.
 
-Unlike traditional cloud-based TTS services, Speechifier is designed for instant, offline usage. It handles complex document parsing directly in the browser and provides a highly customizable playback experience with adjustable speed, pitch, and voice selection.
+Unlike cloud-based TTS services, built for instant offline use. Handles document parsing in browser, gives highly customizable playback: speed, pitch, voice selection.
 
-## Key Objectives
-- **100% Offline Processing**: No server uploads required; all document parsing and speech generation happen locally.
-- **Privacy First**: Documents and text never leave the device.
-- **High-Performance Parsing**: Uses Web Worker offloading for heavy document extraction tasks to keep the UI at 60fps.
+## Key Features
+- **100% Offline Processing** — no server uploads, all parsing local
+- **Privacy First** — docs and text never leave device
+- **High-Performance Parsing** — Web Worker offloading keeps UI at 60fps
+- **Multi-Format Support** — PDF, DOCX, TXT
+- **Full Playback Control** — speed, pitch, voice selection
+- **Auto Language Detection** — picks right voice profile automatically
+- **Background Playback** — keeps reading even when tab backgrounded
 
 ---
 
 # How It Works
 
-Speechifier is structured around three main technical pillars: document extraction, text-to-speech synthesis, and synchronized visualization.
+Three pillars: document extraction, text-to-speech synthesis, synchronized visualization.
 
 ### Document Extraction (`useDocumentExtractor.ts`)
-The extraction layer handles three file types directly in the browser:
-- **PDFs**: Uses `pdf.js`. To prevent the main thread from blocking when parsing large PDFs, it dynamically loads `pdf.worker.min.mjs` as a Web Worker. It iterates through the document pages, filters the raw layout items to extract valid strings, and concats them into a clean blob.
-- **DOCX**: Uses `mammoth.js` to read the raw ArrayBuffer and extract unformatted text while stripping away XML bloat.
-- **TXT**: Uses the native `File.text()` API.
+Handles three file types, all in-browser:
+- **PDFs** — uses [pdf.js](https://mozilla.github.io/pdf.js/). Loads `pdf.worker.min.mjs` as Web Worker to keep main thread free on large files. Iterates pages, filters layout items for valid strings, concats into clean blob.
+- **DOCX** — uses [mammoth.js](https://github.com/mwilliamson/mammoth.js) to read raw ArrayBuffer, extract unformatted text, strip XML bloat.
+- **TXT** — uses native `File.text()` API.
 
 ### Text-to-Speech Engine (`useTTS.ts`)
-The core audio engine leverages the native `SpeechSynthesis` API but layers custom logic on top to handle common browser limitations (like the engine cutting off after 15 seconds of continuous reading).
+Core engine leverages native `SpeechSynthesis` API, layers custom logic to fix browser quirks (like engine cutting off after 15s continuous reading).
 
-- **Text Normalization**: Before synthesis, text is sanitized. URLs are stripped, abbreviations (like Dr., Mr.) are expanded to prevent stutters, smart quotes are normalized, and errant linebreaks are collapsed.
-- **Language Detection**: A lightweight n-gram stopword heuristic inspects the first 1000 characters to detect the language (checking for frequency of 'the', 'la', 'der', etc.), ensuring the correct voice profile is selected.
-- **Intelligent Chunking**: To prevent engine timeouts and improve cadence, the text is split into chunks of maximum 35 words. The splitting logic respects natural prosody boundaries by dividing at commas, periods, or conjunctions ("and", "but").
-- **Synchronization**: The engine uses recursive chaining (`speakChunk`) to queue the next utterance just before the current one finishes. It listens to the `onboundary` event to track exactly which word is being spoken. It calculates the overall progress percentage by mapping the current character index against the current chunk length and total chunk count.
-- **Background Persistence**: Browsers often throttle or kill background tabs. The engine prevents this in two ways: it requests a native `WakeLock` via the Screen Wake Lock API, and as a fallback for mobile Safari/Chrome, it plays a silent, base64-encoded audio track in a loop using the HTML5 `Audio` constructor to force the OS to keep the thread alive.
+- **Text Normalization** — strips URLs, expands abbreviations (Dr., Mr.) to prevent stutters, normalizes smart quotes, collapses errant linebreaks
+- **Language Detection** — lightweight n-gram stopword heuristic scans first 1000 chars (checks frequency of "the", "la", "der", etc.) to pick correct voice profile
+- **Intelligent Chunking** — splits text into max-35-word chunks. Respects natural prosody: splits at commas, periods, conjunctions ("and", "but")
+- **Synchronization** — recursive chaining (`speakChunk`) queues next utterance just before current finishes. Listens to `onboundary` event to track exact word being spoken. Maps char index against chunk length + total chunk count for progress %
+- **Background Persistence** — browsers throttle/kill background tabs. Fixed two ways: requests native `WakeLock` via Screen Wake Lock API, plus fallback silent base64 audio loop via HTML5 `Audio` constructor to keep OS thread alive on mobile Safari/Chrome
 
 ### Audio Visualization (`Visualizer.tsx`)
-The visualization layer is a high-performance `<canvas>` implementation synchronized directly with the TTS engine.
+High-performance `<canvas>` synced directly to TTS engine.
 
-- When the `currentWord` updates via the `onboundary` event, the React state changes. The visualizer intercepts this and spikes a `targetAmplitude` variable based on the current pitch setting.
-- The amplitude then decays at a speed inversely proportional to the reading rate.
-- Inside a `requestAnimationFrame` loop, the canvas draws five overlapping sine waves (strands). The waves use different phase offsets and speeds, layered with a math envelope to pinch the ends. The global amplitude scales both the wave height and the CSS `transform: scale()` of the current spoken word, creating an immersive, reacting UI.
+- `currentWord` updates via `onboundary` → React state changes → visualizer spikes `targetAmplitude` based on pitch setting
+- Amplitude decays at speed inversely proportional to reading rate
+- Inside `requestAnimationFrame` loop, canvas draws five overlapping sine waves ("strands") — different phase offsets/speeds, math envelope pinches ends. Global amplitude scales wave height + CSS `transform: scale()` of spoken word → immersive reacting UI
 
 ---
 
 # Tech Stack & Architecture
 
-- **Framework**: Next.js 14 (App Router)
-- **Styling**: Tailwind CSS
-- **Document Parsing**: `pdf.js`, `mammoth`
-- **Audio Generation**: Web Speech API (`SpeechSynthesis`)
-- **Typography**: `next/font` (Inter & Instrument Serif)
+| Layer | Tech |
+|---|---|
+| Framework | Next.js 14 (App Router) |
+| Styling | Tailwind CSS |
+| Document Parsing | `pdf.js`, `mammoth` |
+| Audio Generation | Web Speech API (`SpeechSynthesis`) |
+| Typography | `next/font` (Inter & Instrument Serif) |
 
 ---
 
 # Getting Started
 
-First, install the dependencies:
+Install dependencies:
 
 ```bash
 npm install
 ```
 
-Then, run the development server:
+Run dev server:
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser.
+Open [http://localhost:3000](http://localhost:3000) in browser.
 
-## Production Build
 
-To create a production build:
-
-```bash
-npm run build
-npm start
-```
-```
