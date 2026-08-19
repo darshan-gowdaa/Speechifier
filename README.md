@@ -58,6 +58,10 @@ Unlike traditional cloud-dependent text-to-speech services, Speechifier is built
 ## Key Features
 - **100% Offline Processing** — no server uploads, all parsing local
 - **Privacy First** — docs and text never leave device
+- **Interactive Reader View** — distraction-free markdown/text rendering
+- **PDF Canvas Viewer** — renders actual PDF pages with exact bounding-box highlighting
+- **Click-to-Seek** — click any word in the document to instantly jump TTS playback to that position
+- **Auto-Scrolling** — document auto-scrolls to keep the active word perfectly centered
 - **High-Performance Parsing** — Web Worker offloading keeps UI at 60fps
 - **Multi-Format Support** — PDF, DOCX, TXT
 - **Full Playback Control** — speed, pitch, voice selection
