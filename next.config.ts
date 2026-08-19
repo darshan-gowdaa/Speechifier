@@ -1,8 +1,18 @@
 import type { NextConfig } from 'next';
+import { copyFileSync, existsSync } from 'fs';
+import { join } from 'path';
+
+// Ensure pdf.js worker is served from same origin (no CORS, no CDN dependency)
+try {
+  const src = join(process.cwd(), 'node_modules/pdfjs-dist/build/pdf.worker.min.mjs');
+  const dest = join(process.cwd(), 'public/pdf.worker.min.mjs');
+  if (!existsSync(dest)) copyFileSync(src, dest);
+} catch (_) {
+  // Non-fatal: worker will fall back to CDN URL
+}
 
 const nextConfig: NextConfig = {
   webpack: (config, { isServer }) => {
-    // Don't bundle these Node-only modules on the client
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
@@ -11,13 +21,10 @@ const nextConfig: NextConfig = {
         crypto: false,
       };
     }
-
-    // Allow WASM files (needed for onnxruntime-web used by transformers.js)
     config.experiments = {
       ...config.experiments,
       asyncWebAssembly: true,
     };
-
     return config;
   },
 };

@@ -9,32 +9,40 @@ export interface TTSVoice {
 }
 
 export function useTTS() {
+  // Bug 1 fix: isSupported computed client-side only, starts false to match SSR
+  const [isSupported, setIsSupported] = useState(false);
   const [status, setStatus] = useState<TTSStatus>('idle');
   const [voices, setVoices] = useState<TTSVoice[]>([]);
   const [selectedVoiceURI, setSelectedVoiceURI] = useState('');
   const [rate, setRate] = useState(1);
   const [pitch, setPitch] = useState(1);
-  const [progress, setProgress] = useState(0); // 0–100
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
-  const textRef = useRef('');
-  const charIndexRef = useRef(0);
+  const [progress, setProgress] = useState(0);
 
-  // Load voices — browsers load them async
+  // Bug 3 fix: track whether default voice has been set, avoids dep cycle
+  const defaultVoiceSetRef = useRef(false);
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+
+  // Bug 1 & 2 fix: all window access inside useEffect (client only)
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (!('speechSynthesis' in window)) return;
+    setIsSupported(true);
 
     const loadVoices = () => {
       const available = window.speechSynthesis.getVoices();
-      if (available.length > 0) {
-        const mapped = available.map((v) => ({
-          name: v.name,
-          lang: v.lang,
-          voiceURI: v.voiceURI,
-        }));
-        setVoices(mapped);
-        // Default: first English voice
+      if (available.length === 0) return;
+
+      const mapped: TTSVoice[] = available.map((v) => ({
+        name: v.name,
+        lang: v.lang,
+        voiceURI: v.voiceURI,
+      }));
+      setVoices(mapped);
+
+      // Set default to first English voice, but only once
+      if (!defaultVoiceSetRef.current) {
+        defaultVoiceSetRef.current = true;
         const english = mapped.find((v) => v.lang.startsWith('en'));
-        if (english && !selectedVoiceURI) setSelectedVoiceURI(english.voiceURI);
+        if (english) setSelectedVoiceURI(english.voiceURI);
       }
     };
 
@@ -42,28 +50,20 @@ export function useTTS() {
     window.speechSynthesis.addEventListener('voiceschanged', loadVoices);
     return () => {
       window.speechSynthesis.removeEventListener('voiceschanged', loadVoices);
+      window.speechSynthesis.cancel();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, []); // stable: no external deps needed
 
   const speak = useCallback(
     (text: string) => {
-      if (!window.speechSynthesis) {
-        setStatus('error');
-        return;
-      }
+      if (!('speechSynthesis' in window)) return;
 
-      // Cancel any in-progress speech
       window.speechSynthesis.cancel();
-
-      textRef.current = text;
-      charIndexRef.current = 0;
 
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = rate;
       utterance.pitch = pitch;
 
-      // Set selected voice
       const allVoices = window.speechSynthesis.getVoices();
       const voice = allVoices.find((v) => v.voiceURI === selectedVoiceURI);
       if (voice) utterance.voice = voice;
@@ -74,11 +74,13 @@ export function useTTS() {
         setProgress(100);
       };
       utterance.onerror = (e) => {
-        if (e.error !== 'interrupted') setStatus('error');
+        // 'interrupted' fires on cancel() — not a real error
+        if (e.error !== 'interrupted' && e.error !== 'canceled') {
+          setStatus('error');
+        }
       };
       utterance.onboundary = (e) => {
         if (e.name === 'word' && text.length > 0) {
-          charIndexRef.current = e.charIndex;
           setProgress(Math.round((e.charIndex / text.length) * 100));
         }
       };
@@ -91,6 +93,7 @@ export function useTTS() {
     [rate, pitch, selectedVoiceURI]
   );
 
+  // Bug 4 note: Android Chrome pause() is often a no-op — best-effort
   const pause = useCallback(() => {
     window.speechSynthesis.pause();
     setStatus('paused');
@@ -107,10 +110,8 @@ export function useTTS() {
     setProgress(0);
   }, []);
 
-  const isSupported =
-    typeof window !== 'undefined' && 'speechSynthesis' in window;
-
   return {
+    isSupported,
     status,
     voices,
     selectedVoiceURI,
@@ -124,6 +125,5 @@ export function useTTS() {
     pause,
     resume,
     stop,
-    isSupported,
   };
 }

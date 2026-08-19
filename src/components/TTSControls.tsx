@@ -23,8 +23,17 @@ export function TTSControls({
   onRateChange, onPitchChange, onVoiceChange, disabled,
 }: TTSControlsProps) {
   const isPlaying = status === 'playing';
-  const isPaused = status === 'paused';
-  const isActive = isPlaying || isPaused;
+  const isPaused  = status === 'paused';
+  const isDone    = status === 'done';
+  const isActive  = isPlaying || isPaused;
+
+  const statusLabel = isPlaying
+    ? '▶ Reading…'
+    : isPaused
+    ? '⏸ Paused'
+    : isDone
+    ? '✓ Done'
+    : 'Ready';
 
   return (
     <div
@@ -34,7 +43,7 @@ export function TTSControls({
         borderColor: 'var(--md-sys-color-outline-variant)',
       }}
     >
-      {/* Progress bar */}
+      {/* ── Progress bar ─────────────────────────────────────────────── */}
       <div>
         <div
           className="w-full rounded-full overflow-hidden"
@@ -42,15 +51,12 @@ export function TTSControls({
         >
           <div
             className="h-full rounded-full transition-all duration-300"
-            style={{
-              width: `${progress}%`,
-              backgroundColor: 'var(--md-sys-color-primary)',
-            }}
+            style={{ width: `${progress}%`, backgroundColor: 'var(--md-sys-color-primary)' }}
           />
         </div>
         <div className="flex justify-between mt-1">
           <span className="md3-label-medium" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
-            {isPlaying ? '▶ Reading…' : isPaused ? '⏸ Paused' : status === 'done' ? '✓ Done' : 'Ready'}
+            {statusLabel}
           </span>
           <span className="md3-label-medium" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
             {progress}%
@@ -58,10 +64,11 @@ export function TTSControls({
         </div>
       </div>
 
-      {/* Playback buttons */}
-      <div className="flex items-center justify-center gap-3">
-        {/* Play / Pause / Resume */}
-        {!isActive ? (
+      {/* ── Playback buttons ─────────────────────────────────────────── */}
+      <div className="flex items-center justify-center gap-3 flex-wrap">
+
+        {/* Idle or Done → Play / Read Again */}
+        {(!isActive && !isDone) && (
           <button
             onClick={onPlay}
             disabled={disabled}
@@ -70,39 +77,58 @@ export function TTSControls({
           >
             <PlayIcon /> Read Aloud
           </button>
-        ) : isPlaying ? (
+        )}
+
+        {/* Done → Read Again (tonal) */}
+        {isDone && (
           <button
-            onClick={onPause}
+            onClick={onPlay}
+            disabled={disabled}
             className="md3-tonal-button h-12 px-6 gap-2"
           >
+            <ReplayIcon /> Read Again
+          </button>
+        )}
+
+        {/* Playing → Pause */}
+        {isPlaying && (
+          <button onClick={onPause} className="md3-tonal-button h-12 px-6 gap-2">
             <PauseIcon /> Pause
           </button>
-        ) : (
-          <button
-            onClick={onResume}
-            className="md3-tonal-button h-12 px-6 gap-2"
-          >
+        )}
+
+        {/* Paused → Resume */}
+        {isPaused && (
+          <button onClick={onResume} className="md3-tonal-button h-12 px-6 gap-2">
             <PlayIcon /> Resume
           </button>
         )}
 
-        {/* Stop */}
+        {/* Active → Stop */}
         {isActive && (
-          <button
-            onClick={onStop}
-            className="md3-outlined-button h-12 px-6 gap-2"
-          >
+          <button onClick={onStop} className="md3-outlined-button h-12 px-6 gap-2">
             <StopIcon /> Stop
+          </button>
+        )}
+
+        {/* Done → Stop/reset */}
+        {isDone && (
+          <button onClick={onStop} className="md3-outlined-button h-12 px-6 gap-2">
+            <StopIcon /> Reset
           </button>
         )}
       </div>
 
-      {/* Settings */}
+      {/* ── Settings ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        {/* Voice */}
+
+        {/* Voice selector */}
         {voices.length > 0 && (
           <div className="flex flex-col gap-1 md:col-span-1">
-            <label className="md3-label-medium" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
+            <label
+              className="md3-label-medium"
+              style={{ color: 'var(--md-sys-color-on-surface-variant)' }}
+            >
               Voice
             </label>
             <select
@@ -124,10 +150,14 @@ export function TTSControls({
           </div>
         )}
 
-        {/* Speed */}
+        {/* Speed — Bug 15 fix: toFixed(1) */}
         <div className="flex flex-col gap-1">
-          <label className="md3-label-medium flex justify-between" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
-            <span>Speed</span><span style={{ color: 'var(--md-sys-color-primary)' }}>{rate}×</span>
+          <label
+            className="md3-label-medium flex justify-between"
+            style={{ color: 'var(--md-sys-color-on-surface-variant)' }}
+          >
+            <span>Speed</span>
+            <span style={{ color: 'var(--md-sys-color-primary)' }}>{rate.toFixed(1)}×</span>
           </label>
           <input
             type="range" min={0.5} max={2} step={0.1}
@@ -137,10 +167,14 @@ export function TTSControls({
           />
         </div>
 
-        {/* Pitch */}
+        {/* Pitch — Bug 15 fix: toFixed(1) */}
         <div className="flex flex-col gap-1">
-          <label className="md3-label-medium flex justify-between" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
-            <span>Pitch</span><span style={{ color: 'var(--md-sys-color-primary)' }}>{pitch.toFixed(1)}</span>
+          <label
+            className="md3-label-medium flex justify-between"
+            style={{ color: 'var(--md-sys-color-on-surface-variant)' }}
+          >
+            <span>Pitch</span>
+            <span style={{ color: 'var(--md-sys-color-primary)' }}>{pitch.toFixed(1)}</span>
           </label>
           <input
             type="range" min={0.5} max={2} step={0.1}
@@ -154,24 +188,32 @@ export function TTSControls({
   );
 }
 
+/* ── Icons ──────────────────────────────────────────────────────────────── */
 function PlayIcon() {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
       <path d="M8 5v14l11-7z" />
     </svg>
   );
 }
 function PauseIcon() {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
       <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
     </svg>
   );
 }
 function StopIcon() {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
       <path d="M6 6h12v12H6z" />
+    </svg>
+  );
+}
+function ReplayIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/>
     </svg>
   );
 }

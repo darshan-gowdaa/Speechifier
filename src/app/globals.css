@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 @theme {
+  --font-sans: var(--font-roboto), Roboto, system-ui, sans-serif;
   --color-primary: var(--md-sys-color-primary);
   --color-on-primary: var(--md-sys-color-on-primary);
   --color-primary-container: var(--md-sys-color-primary-container);
