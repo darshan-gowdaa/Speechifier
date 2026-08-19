@@ -11,7 +11,7 @@
     <br />
     <strong>
     Vercel Deployment:
-    <a href="https://speech-to-text-next.vercel.app/"><strong>View Live Website »</strong></a>
+    <a href="https://speechifier-app.vercel.app/"><strong>View Live Website »</strong></a>
     </strong>
   </p>
 </div>
