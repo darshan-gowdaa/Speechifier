@@ -32,15 +32,22 @@ export default function Home() {
 
   // Mobile browsers block autoplay unless video is muted and playsinline is set.
   useEffect(() => {
+    if (!mounted) return;
     const video = videoRef.current;
     if (!video) return;
+
     video.defaultMuted = true;
     video.muted = true;
-    video.play().catch(() => {});
+    
+    const playVideo = () => {
+      video.play().catch(() => {});
+    };
+
+    playVideo();
 
     const handleTouch = () => {
       if (video && video.paused) {
-        video.play().catch(() => {});
+        playVideo();
       }
     };
     window.addEventListener("touchstart", handleTouch, { once: true });
@@ -49,7 +56,7 @@ export default function Home() {
       window.removeEventListener("touchstart", handleTouch);
       window.removeEventListener("click", handleTouch);
     };
-  }, []);
+  }, [mounted]);
 
   useEffect(() => {
     if (menuOpen) document.body.classList.add('menu-open');
