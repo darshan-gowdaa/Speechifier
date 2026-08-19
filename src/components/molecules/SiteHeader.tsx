@@ -11,13 +11,13 @@ interface Props {
 
 export function SiteHeader({ hasFile, viewMode = "simple", onToggleView }: Props) {
   return (
-    <header className={`fixed inset-x-0 top-0 z-[200] flex items-center justify-between px-6 transition-all duration-300 h-16 ${viewMode === "detailed" ? "bg-black/60 backdrop-blur-xl border-b border-white/10" : "bg-transparent pointer-events-none"}`}>
+    <header className={`fixed inset-x-0 top-0 z-[200] flex items-center justify-between px-4 sm:px-6 transition-all duration-300 h-16 ${viewMode === "detailed" ? "bg-black/60 backdrop-blur-xl border-b border-white/10" : "bg-transparent pointer-events-none"}`}>
       <div className={`logo appear appear--scale drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)] ${viewMode === "simple" ? "pointer-events-auto" : ""}`} aria-label="Speechifier" style={{ "--d": "0.08s" } as React.CSSProperties}>
         <RiSpeakFill className="drop-shadow-lg" />
         <span className={`hidden sm:inline ${instrument.className} text-[1.2em] font-normal tracking-wide`}>Speechifier</span>
       </div>
 
-      <nav id="site-nav" aria-label="Primary" className={`flex items-center ${viewMode === "simple" ? "pointer-events-auto" : ""}`}>
+      <nav aria-label="Primary" className={`flex items-center ${viewMode === "simple" ? "pointer-events-auto" : ""}`}>
         {hasFile && onToggleView ? (
           <div className="flex items-center bg-white/10 rounded-lg p-1 border border-white/10">
             <button

@@ -289,7 +289,8 @@ body.menu-open .burger span:nth-child(3) { transform: translateY(-6.5px) rotate(
 }
 
 @media (max-width:560px) {
-  .vesper-root { --h1:34px;--lede:16px;--header-x:16px; }
+  .headline-line { overflow: visible !important; white-space: normal; }
+  .vesper-root { --h1:clamp(28px, 8.5vw, 34px);--lede:16px;--header-x:16px; }
   .hero-actions { flex-direction:column; width:100%; }
   .hero-actions .v-btn { width:100%; }
 }
