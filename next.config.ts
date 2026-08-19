@@ -2,14 +2,24 @@ import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   webpack: (config, { isServer }) => {
-    config.resolve.fallback = {
-      ...config.resolve.fallback,
-      fs: false,
-      crypto: false,
+    // Don't bundle these Node-only modules on the client
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        path: false,
+        crypto: false,
+      };
+    }
+
+    // Allow WASM files (needed for onnxruntime-web used by transformers.js)
+    config.experiments = {
+      ...config.experiments,
+      asyncWebAssembly: true,
     };
+
     return config;
   },
-  turbopack: {},
 };
 
 export default nextConfig;

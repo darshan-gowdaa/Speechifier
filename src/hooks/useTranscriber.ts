@@ -1,126 +1,112 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 export type ModelStatus = 'idle' | 'loading' | 'ready' | 'error';
 
+// We keep the pipeline instance in a module-level ref so it survives
+// React re-renders and Fast Refresh without being re-created.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _pipelineInstance: any = null;
+
 export function useTranscriber() {
   const [modelStatus, setModelStatus] = useState<ModelStatus>('idle');
-  const [modelProgress, setModelProgress] = useState<number>(0);
-  const [modelError, setModelError] = useState<string>('');
+  const [modelProgress, setModelProgress] = useState(0);
+  const [modelError, setModelError] = useState('');
   const [isTranscribing, setIsTranscribing] = useState(false);
-
-  // Stable refs — never change after mount
-  const workerRef = useRef<Worker | null>(null);
-  const loadedRef = useRef(false); // guard: only send LOAD_MODEL once
-
-  // Transcribe promise refs
-  const transcribeResolveRef = useRef<((text: string) => void) | null>(null);
-  const transcribeRejectRef = useRef<((err: Error) => void) | null>(null);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
-    // Only run in browser, only once
-    if (typeof window === 'undefined') return;
-    if (workerRef.current) return;
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
-    let worker: Worker;
-    try {
-      worker = new Worker(
-        new URL('../workers/transcriber.worker.ts', import.meta.url),
-        { type: 'module' }
-      );
-    } catch (e: any) {
-      setModelStatus('error');
-      setModelError('Failed to create Web Worker: ' + (e?.message ?? String(e)));
+  useEffect(() => {
+    // Already loaded — nothing to do
+    if (_pipelineInstance) {
+      setModelStatus('ready');
+      setModelProgress(100);
       return;
     }
 
-    workerRef.current = worker;
+    let cancelled = false;
 
-    worker.addEventListener('message', (e: MessageEvent) => {
-      const { type, payload } = e.data;
+    const load = async () => {
+      try {
+        setModelStatus('loading');
+        setModelProgress(0);
+        setModelError('');
 
-      switch (type) {
-        case 'MODEL_PROGRESS': {
-          // payload: { status, name, file, progress, loaded, total }
-          const pct =
-            typeof payload?.progress === 'number'
-              ? Math.round(payload.progress)
-              : typeof payload?.loaded === 'number' && typeof payload?.total === 'number' && payload.total > 0
-              ? Math.round((payload.loaded / payload.total) * 100)
-              : 0;
-          setModelProgress(pct);
-          break;
-        }
-        case 'MODEL_READY':
+        // Dynamic import avoids SSR issues and defers the huge bundle
+        const { pipeline, env } = await import('@huggingface/transformers');
+
+        env.allowLocalModels = false;
+        env.useBrowserCache = true;
+
+        const pipe = await pipeline(
+          'automatic-speech-recognition',
+          'Xenova/whisper-tiny.en',
+          {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            progress_callback: (data: any) => {
+              if (cancelled || !mountedRef.current) return;
+              // data.progress is 0-100 when status === 'progress'
+              if (data.status === 'progress' && typeof data.progress === 'number') {
+                setModelProgress(Math.round(data.progress));
+              } else if (
+                data.status === 'progress' &&
+                typeof data.loaded === 'number' &&
+                typeof data.total === 'number' &&
+                data.total > 0
+              ) {
+                setModelProgress(Math.round((data.loaded / data.total) * 100));
+              }
+            },
+          }
+        );
+
+        if (cancelled) return;
+
+        _pipelineInstance = pipe;
+        if (mountedRef.current) {
           setModelStatus('ready');
           setModelProgress(100);
-          break;
-        case 'MODEL_ERROR':
+        }
+      } catch (err: unknown) {
+        if (cancelled) return;
+        const msg =
+          err instanceof Error
+            ? err.message
+            : typeof err === 'string'
+            ? err
+            : 'Unknown error loading model';
+        if (mountedRef.current) {
           setModelStatus('error');
-          setModelError(payload ?? 'Unknown model error');
-          break;
-        case 'TRANSCRIBE_DONE':
-          setIsTranscribing(false);
-          transcribeResolveRef.current?.(payload?.text ?? '');
-          transcribeResolveRef.current = null;
-          transcribeRejectRef.current = null;
-          break;
-        case 'TRANSCRIBE_ERROR':
-          setIsTranscribing(false);
-          transcribeRejectRef.current?.(new Error(payload ?? 'Transcription failed'));
-          transcribeResolveRef.current = null;
-          transcribeRejectRef.current = null;
-          break;
+          setModelError(msg);
+        }
       }
-    });
+    };
 
-    worker.addEventListener('error', (e: ErrorEvent) => {
-      setModelStatus('error');
-      setModelError(`Worker crashed: ${e.message}`);
-      setIsTranscribing(false);
-      transcribeRejectRef.current?.(new Error(`Worker crashed: ${e.message}`));
-      transcribeResolveRef.current = null;
-      transcribeRejectRef.current = null;
-    });
+    load();
 
-    // Load model exactly once
-    if (!loadedRef.current) {
-      loadedRef.current = true;
-      setModelStatus('loading');
-      worker.postMessage({ type: 'LOAD_MODEL' });
+    return () => { cancelled = true; };
+  }, []); // run once
+
+  const transcribe = useCallback(async (audioData: Float32Array): Promise<string> => {
+    if (!_pipelineInstance) {
+      throw new Error('Model is not loaded yet. Please wait.');
     }
 
-    return () => {
-      worker.terminate();
-      workerRef.current = null;
-      loadedRef.current = false;
-    };
-  }, []); // ← empty deps: runs once on mount, cleans up on unmount
-
-  const transcribe = useCallback((audioData: Float32Array): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      if (!workerRef.current) {
-        reject(new Error('Worker not ready'));
-        return;
-      }
-
-      setIsTranscribing(true);
-      transcribeResolveRef.current = resolve;
-      transcribeRejectRef.current = reject;
-
-      // Transfer the underlying ArrayBuffer (zero-copy)
-      const buffer = audioData.buffer.slice(0); // slice to ensure we own it
-      workerRef.current.postMessage(
-        { type: 'TRANSCRIBE', payload: { audioData: buffer } },
-        [buffer]
-      );
-    });
+    setIsTranscribing(true);
+    try {
+      const result = await _pipelineInstance(audioData, {
+        chunk_length_s: 30,
+        stride_length_s: 5,
+        return_timestamps: false,
+      });
+      return (result as { text: string }).text ?? '';
+    } finally {
+      if (mountedRef.current) setIsTranscribing(false);
+    }
   }, []);
 
-  return {
-    modelStatus,
-    modelProgress,
-    modelError,
-    isTranscribing,
-    transcribe,
-  };
+  return { modelStatus, modelProgress, modelError, isTranscribing, transcribe };
 }
