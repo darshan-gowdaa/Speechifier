@@ -5,80 +5,113 @@ export type ModelStatus = 'idle' | 'loading' | 'ready' | 'error';
 export function useTranscriber() {
   const [modelStatus, setModelStatus] = useState<ModelStatus>('idle');
   const [modelProgress, setModelProgress] = useState<number>(0);
+  const [modelError, setModelError] = useState<string>('');
   const [isTranscribing, setIsTranscribing] = useState(false);
-  const workerRef = useRef<Worker | null>(null);
 
-  // Initialize worker
+  // Stable refs — never change after mount
+  const workerRef = useRef<Worker | null>(null);
+  const loadedRef = useRef(false); // guard: only send LOAD_MODEL once
+
+  // Transcribe promise refs
+  const transcribeResolveRef = useRef<((text: string) => void) | null>(null);
+  const transcribeRejectRef = useRef<((err: Error) => void) | null>(null);
+
   useEffect(() => {
-    if (!workerRef.current) {
-      workerRef.current = new Worker(
+    // Only run in browser, only once
+    if (typeof window === 'undefined') return;
+    if (workerRef.current) return;
+
+    let worker: Worker;
+    try {
+      worker = new Worker(
         new URL('../workers/transcriber.worker.ts', import.meta.url),
         { type: 'module' }
       );
+    } catch (e: any) {
+      setModelStatus('error');
+      setModelError('Failed to create Web Worker: ' + (e?.message ?? String(e)));
+      return;
     }
 
-    const worker = workerRef.current;
+    workerRef.current = worker;
 
-    const handleMessage = (e: MessageEvent) => {
+    worker.addEventListener('message', (e: MessageEvent) => {
       const { type, payload } = e.data;
+
       switch (type) {
-        case 'MODEL_PROGRESS':
-          if (payload.status === 'progress' && payload.progress !== undefined) {
-            setModelProgress(Math.round(payload.progress));
-          }
+        case 'MODEL_PROGRESS': {
+          // payload: { status, name, file, progress, loaded, total }
+          const pct =
+            typeof payload?.progress === 'number'
+              ? Math.round(payload.progress)
+              : typeof payload?.loaded === 'number' && typeof payload?.total === 'number' && payload.total > 0
+              ? Math.round((payload.loaded / payload.total) * 100)
+              : 0;
+          setModelProgress(pct);
           break;
+        }
         case 'MODEL_READY':
           setModelStatus('ready');
+          setModelProgress(100);
           break;
         case 'MODEL_ERROR':
           setModelStatus('error');
-          console.error('Model error:', payload);
+          setModelError(payload ?? 'Unknown model error');
+          break;
+        case 'TRANSCRIBE_DONE':
+          setIsTranscribing(false);
+          transcribeResolveRef.current?.(payload?.text ?? '');
+          transcribeResolveRef.current = null;
+          transcribeRejectRef.current = null;
+          break;
+        case 'TRANSCRIBE_ERROR':
+          setIsTranscribing(false);
+          transcribeRejectRef.current?.(new Error(payload ?? 'Transcription failed'));
+          transcribeResolveRef.current = null;
+          transcribeRejectRef.current = null;
           break;
       }
-    };
+    });
 
-    worker.addEventListener('message', handleMessage);
-    
-    // Auto-load model
-    if (modelStatus === 'idle') {
+    worker.addEventListener('error', (e: ErrorEvent) => {
+      setModelStatus('error');
+      setModelError(`Worker crashed: ${e.message}`);
+      setIsTranscribing(false);
+      transcribeRejectRef.current?.(new Error(`Worker crashed: ${e.message}`));
+      transcribeResolveRef.current = null;
+      transcribeRejectRef.current = null;
+    });
+
+    // Load model exactly once
+    if (!loadedRef.current) {
+      loadedRef.current = true;
       setModelStatus('loading');
       worker.postMessage({ type: 'LOAD_MODEL' });
     }
 
     return () => {
-      worker.removeEventListener('message', handleMessage);
+      worker.terminate();
+      workerRef.current = null;
+      loadedRef.current = false;
     };
-  }, [modelStatus]);
+  }, []); // ← empty deps: runs once on mount, cleans up on unmount
 
   const transcribe = useCallback((audioData: Float32Array): Promise<string> => {
     return new Promise((resolve, reject) => {
       if (!workerRef.current) {
-        reject(new Error('Worker not initialized'));
+        reject(new Error('Worker not ready'));
         return;
       }
 
-      const worker = workerRef.current;
       setIsTranscribing(true);
+      transcribeResolveRef.current = resolve;
+      transcribeRejectRef.current = reject;
 
-      const handleTranscribeMessage = (e: MessageEvent) => {
-        const { type, payload } = e.data;
-        if (type === 'TRANSCRIBE_DONE') {
-          setIsTranscribing(false);
-          worker.removeEventListener('message', handleTranscribeMessage);
-          resolve(payload.text);
-        } else if (type === 'TRANSCRIBE_ERROR') {
-          setIsTranscribing(false);
-          worker.removeEventListener('message', handleTranscribeMessage);
-          reject(new Error(payload));
-        }
-      };
-
-      worker.addEventListener('message', handleTranscribeMessage);
-      
-      // Transfer buffer to avoid structured clone copying huge arrays
-      worker.postMessage(
-        { type: 'TRANSCRIBE', payload: { audioData: audioData.buffer } },
-        [audioData.buffer]
+      // Transfer the underlying ArrayBuffer (zero-copy)
+      const buffer = audioData.buffer.slice(0); // slice to ensure we own it
+      workerRef.current.postMessage(
+        { type: 'TRANSCRIBE', payload: { audioData: buffer } },
+        [buffer]
       );
     });
   }, []);
@@ -86,7 +119,8 @@ export function useTranscriber() {
   return {
     modelStatus,
     modelProgress,
+    modelError,
     isTranscribing,
-    transcribe
+    transcribe,
   };
 }

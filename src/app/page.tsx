@@ -5,126 +5,195 @@ import { useTranscriber } from '../hooks/useTranscriber';
 import { FileDropZone } from '../components/FileDropZone';
 import { TranscriptionResult } from '../components/TranscriptionResult';
 import { ModelStatus } from '../components/ModelStatus';
-import { Snackbar } from '../components/Snackbar';
-
-interface SnackbarState {
-  id: number;
-  message: string;
-  type: 'default' | 'error' | 'success';
-}
+import { Snackbar, type SnackbarItem } from '../components/Snackbar';
 
 export default function Home() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [transcriptionResult, setTranscriptionResult] = useState<string>('');
-  const [snackbars, setSnackbars] = useState<SnackbarState[]>([]);
-  const { modelStatus, modelProgress, isTranscribing, transcribe } = useTranscriber();
+  const [snackbars, setSnackbars] = useState<SnackbarItem[]>([]);
 
-  const showSnackbar = useCallback((message: string, type: 'default' | 'error' | 'success' = 'default') => {
-    setSnackbars((prev) => [...prev, { id: Date.now(), message, type }]);
-  }, []);
+  const { modelStatus, modelProgress, modelError, isTranscribing, transcribe } =
+    useTranscriber();
 
-  const handleDismissSnackbar = useCallback((id: number) => {
+  // ── Surface model errors into snackbar ─────────────────────────────────────
+  useEffect(() => {
+    if (modelStatus === 'error' && modelError) {
+      showSnackbar(`Model failed to load: ${modelError}`, 'error');
+    }
+  }, [modelStatus, modelError]);
+
+  // ── Snackbar helpers ───────────────────────────────────────────────────────
+  const showSnackbar = useCallback(
+    (message: string, type: SnackbarItem['type'] = 'default') => {
+      setSnackbars((prev) => [
+        ...prev,
+        { id: Date.now() + Math.random(), message, type },
+      ]);
+    },
+    []
+  );
+
+  const dismissSnackbar = useCallback((id: number) => {
     setSnackbars((prev) => prev.filter((s) => s.id !== id));
   }, []);
 
-  const handleFileSelect = (file: File) => {
-    if (file.size > 100 * 1024 * 1024) {
-      showSnackbar('File too large (Max 100MB)', 'error');
-      return;
+  // ── File selection ─────────────────────────────────────────────────────────
+  const handleFileSelect = useCallback(
+    (file: File) => {
+      if (!file.type.startsWith('audio/')) {
+        showSnackbar(`"${file.name}" is not an audio file`, 'error');
+        return;
+      }
+      if (file.size > 100 * 1024 * 1024) {
+        showSnackbar('File is too large. Maximum size is 100 MB.', 'error');
+        return;
+      }
+      setSelectedFile(file);
+      setTranscriptionResult('');
+    },
+    [showSnackbar]
+  );
+
+  // ── Audio decoding ─────────────────────────────────────────────────────────
+  const decodeAudioTo16kHz = async (file: File): Promise<Float32Array> => {
+    // Create AudioContext at exactly 16 kHz — browser will resample automatically
+    const AudioCtxClass =
+      window.AudioContext ??
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).webkitAudioContext;
+
+    if (!AudioCtxClass) {
+      throw new Error(
+        'Your browser does not support the Web Audio API. ' +
+          'Try Chrome, Edge, or Firefox.'
+      );
     }
-    setSelectedFile(file);
-    setTranscriptionResult(''); // Reset result on new file
+
+    const ctx = new AudioCtxClass({ sampleRate: 16000 });
+
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const decoded = await ctx.decodeAudioData(arrayBuffer);
+      // Whisper uses mono — use channel 0
+      return decoded.getChannelData(0).slice(); // clone so we own the buffer
+    } finally {
+      await ctx.close();
+    }
   };
 
-  const processAudioFile = async (file: File): Promise<Float32Array> => {
-    // SSR guard
-    if (typeof window === 'undefined' || !window.AudioContext) {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) throw new Error('AudioContext not supported in this browser');
-    }
-
-    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-    const ctx = new AudioCtx({ sampleRate: 16000 }); // MUST resample to 16kHz
-    
-    const arrayBuffer = await file.arrayBuffer();
-    const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
-    
-    // We only need a single channel for Whisper
-    return audioBuffer.getChannelData(0);
-  };
-
+  // ── Transcription ──────────────────────────────────────────────────────────
   const handleTranscribe = async () => {
     if (!selectedFile) return;
-    
+
+    let audioData: Float32Array;
+
     try {
-      showSnackbar('Processing audio...', 'default');
-      const audioData = await processAudioFile(selectedFile);
-      
-      showSnackbar('Transcribing...', 'default');
-      const result = await transcribe(audioData);
-      
-      setTranscriptionResult(result);
+      showSnackbar('Decoding audio…');
+      audioData = await decodeAudioTo16kHz(selectedFile);
+    } catch (err: any) {
+      showSnackbar(err?.message ?? 'Could not decode audio file.', 'error');
+      return;
+    }
+
+    try {
+      showSnackbar('Transcribing with Whisper AI…');
+      const text = await transcribe(audioData);
+      setTranscriptionResult(text);
       showSnackbar('Transcription complete!', 'success');
     } catch (err: any) {
-      console.error(err);
-      showSnackbar(err.message || 'Error transcribing audio', 'error');
+      showSnackbar(err?.message ?? 'Transcription failed. Please try again.', 'error');
     }
   };
 
+  // ── Derived state ──────────────────────────────────────────────────────────
+  const isModelLoading = modelStatus === 'idle' || modelStatus === 'loading';
+  const isReady = modelStatus === 'ready';
+  const canTranscribe = isReady && !!selectedFile && !isTranscribing;
+
   return (
-    <main className="min-h-screen p-4 md:p-8 lg:p-12 max-w-4xl mx-auto flex flex-col gap-8">
-      <header className="text-center mt-8 mb-4">
-        <h1 className="md3-display-large text-[var(--md-sys-color-primary)] font-medium mb-2">Echo</h1>
-        <p className="md3-headline-medium text-[var(--md-sys-color-on-surface-variant)]">
+    <main className="min-h-screen p-4 md:p-8 max-w-2xl mx-auto flex flex-col gap-6">
+      {/* Header */}
+      <header className="text-center mt-8 mb-2">
+        <h1
+          className="md3-display-large mb-2"
+          style={{ color: 'var(--md-sys-color-primary)' }}
+        >
+          Echo
+        </h1>
+        <p
+          className="md3-headline-medium"
+          style={{ color: 'var(--md-sys-color-on-surface-variant)' }}
+        >
           Local AI Transcription
+        </p>
+        <p
+          className="md3-body-medium mt-1"
+          style={{ color: 'var(--md-sys-color-on-surface-variant)' }}
+        >
+          Powered by Whisper · Runs entirely in your browser
         </p>
       </header>
 
-      {(modelStatus === 'loading' || modelStatus === 'idle') && (
-        <ModelStatus progress={modelProgress} />
-      )}
+      {/* Model loading card */}
+      {isModelLoading && <ModelStatus progress={modelProgress} />}
 
+      {/* Model error card (persistent, not just snackbar) */}
       {modelStatus === 'error' && (
-        <div className="bg-[var(--md-sys-color-error-container)] text-[var(--md-sys-color-on-error-container)] p-4 md3-shape-lg">
-          <p className="md3-body-large font-medium">Error loading AI model. Please check console.</p>
+        <div
+          className="md3-shape-lg p-4 border"
+          style={{
+            backgroundColor: 'var(--md-sys-color-error-container)',
+            borderColor: 'var(--md-sys-color-error)',
+            color: 'var(--md-sys-color-on-error-container)',
+          }}
+        >
+          <p className="md3-title-medium mb-1">⚠ Model failed to load</p>
+          <p className="md3-body-medium">{modelError || 'Unknown error occurred.'}</p>
+          <p className="md3-body-medium mt-2 opacity-70">
+            This can happen if your browser blocks Web Workers, or if there's no
+            internet for the first model download. Try refreshing the page.
+          </p>
         </div>
       )}
 
-      <div className="flex flex-col gap-6">
-        <FileDropZone 
-          onFileSelect={handleFileSelect} 
-          selectedFile={selectedFile} 
-          onClear={() => {
-            setSelectedFile(null);
-            setTranscriptionResult('');
-          }} 
-        />
-        
-        <div className="flex justify-center">
-          <button 
-            onClick={handleTranscribe}
-            disabled={!selectedFile || isTranscribing || modelStatus !== 'ready'}
-            className="md3-filled-button h-14 px-8 w-full md:w-auto md:min-w-[240px] text-lg"
-          >
-            {isTranscribing ? 'Transcribing...' : 'Transcribe Audio'}
-          </button>
-        </div>
+      {/* File upload */}
+      <FileDropZone
+        onFileSelect={handleFileSelect}
+        selectedFile={selectedFile}
+        onClear={() => {
+          setSelectedFile(null);
+          setTranscriptionResult('');
+        }}
+      />
+
+      {/* Transcribe button */}
+      <div className="flex justify-center">
+        <button
+          onClick={handleTranscribe}
+          disabled={!canTranscribe}
+          className="md3-filled-button h-14 px-10 w-full md:w-auto md:min-w-[240px]"
+          style={{ fontSize: '1rem' }}
+        >
+          {isTranscribing
+            ? '⏳ Transcribing…'
+            : isModelLoading
+            ? '⏳ Loading model…'
+            : 'Transcribe Audio'}
+        </button>
       </div>
 
+      {/* Result */}
       {transcriptionResult && (
         <TranscriptionResult text={transcriptionResult} />
       )}
 
-      {/* Snackbar queue render */}
+      {/* Snackbar stack */}
       {snackbars.map((sb, idx) => (
         <Snackbar
           key={sb.id}
-          visible={true}
-          message={sb.message}
-          type={sb.type}
-          onDismiss={() => handleDismissSnackbar(sb.id)}
-          // offset older snackbars up
-          {...(idx < snackbars.length - 1 ? { style: { bottom: `${(snackbars.length - 1 - idx) * 60 + 24}px` } } : {})}
+          item={sb}
+          stackOffset={snackbars.length - 1 - idx}
+          onDismiss={dismissSnackbar}
         />
       ))}
     </main>
