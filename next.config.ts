@@ -1,7 +1,15 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  // Empty config, rely on Turbopack defaults
+  webpack: (config, { isServer }) => {
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      fs: false,
+      crypto: false,
+    };
+    return config;
+  },
+  turbopack: {},
 };
 
 export default nextConfig;
