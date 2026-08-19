@@ -1,19 +1,12 @@
 import type { Metadata } from "next";
-import { Roboto } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 
-// Roboto is the fallback for Google Sans on non-Android devices.
-// Google Sans is pre-installed on all Android phones.
-const roboto = Roboto({
-  weight: ["400", "500", "700"],
-  subsets: ["latin"],
-  variable: "--font-roboto",
-  display: "swap",
-});
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Speech to Text",
-  description: "Upload a PDF, DOCX, or TXT and have it read aloud. Runs entirely in your browser.",
+  title: "Speech to Text M3",
+  description: "M3 Expressive offline speech-to-text",
 };
 
 export default function RootLayout({
@@ -23,7 +16,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${roboto.variable} font-sans antialiased min-h-screen`}>
+      <body className={`${inter.className} min-h-screen`}>
         {children}
       </body>
     </html>

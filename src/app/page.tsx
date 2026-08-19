@@ -1,467 +1,217 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from 'react';
-import { useDocumentExtractor } from '../hooks/useDocumentExtractor';
-import { useTTS } from '../hooks/useTTS';
-import { TTSControls } from '../components/TTSControls';
-import { SpeakingBlob } from '../components/SpeakingBlob';
-import { Snackbar, type SnackbarItem } from '../components/Snackbar';
-import Strands from '../components/Strands';
-const ACCEPTED =
-  '.pdf,.docx,.txt,' +
-  'application/pdf,' +
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document,' +
-  'text/plain';
+import { useState, useCallback, useRef, useEffect } from "react";
+import { useDocumentExtractor } from "../hooks/useDocumentExtractor";
+import { useTTS } from "../hooks/useTTS";
+import { M3LoadingIndicator } from "@alerix/m3-loading-indicator/react";
+import { 
+  RiUploadCloud2Line, RiFileTextLine, RiFileCopyLine, RiCheckLine, 
+  RiDownloadLine, RiPlayFill, RiPauseFill, RiStopFill, RiRefreshLine
+} from "@remixicon/react";
+
+const ACCEPTED = ".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain";
 
 export default function Home() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  const [selectedFile, setSelectedFile]   = useState<File | null>(null);
-  const [extractedText, setExtractedText] = useState('');
-  const [isDragging, setIsDragging]       = useState(false);
-  const [snackbars, setSnackbars]         = useState<SnackbarItem[]>([]);
-  const [copied, setCopied]               = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [extractedText, setExtractedText] = useState("");
+  const [isDragging, setIsDragging] = useState(false);
+  const [copied, setCopied] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const { status: extractStatus, extract } = useDocumentExtractor();
   const tts = useTTS();
 
-  useEffect(() => {
-    if (tts.status === 'error' && tts.errorMsg) {
-      showSnackbar(tts.errorMsg, 'error');
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tts.status, tts.errorMsg]);
+  const isExtracting = extractStatus === "extracting";
+  const hasText = extractedText.length > 0;
+  const wordCount = hasText ? extractedText.split(/\s+/).filter(Boolean).length : 0;
 
-  const ttsStopRef = useRef(tts.stop);
-  useEffect(() => { ttsStopRef.current = tts.stop; }, [tts.stop]);
-
-  const showSnackbar = useCallback(
-    (message: string, type: SnackbarItem['type'] = 'default') => {
-      setSnackbars((prev) => [
-        ...prev,
-        { id: Date.now() + Math.random(), message, type },
-      ]);
-    },
-    []
-  );
-
-  const dismissSnackbar = useCallback((id: number) => {
-    setSnackbars((prev) => prev.filter((s) => s.id !== id));
-  }, []);
-
-  const handleCopy = useCallback(async () => {
+  const handleCopy = async () => {
     if (!extractedText) return;
     try {
       await navigator.clipboard.writeText(extractedText);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-      showSnackbar('Text copied to clipboard!', 'success');
-    } catch {
-      showSnackbar('Could not copy — try selecting text manually.', 'error');
-    }
-  }, [extractedText, showSnackbar]);
+    } catch {}
+  };
 
-  const handleDownload = useCallback(() => {
+  const handleDownload = () => {
     if (!extractedText || !selectedFile) return;
-    const baseName = selectedFile.name.replace(/\.[^.]+$/, '');
-    const blob = new Blob([extractedText], { type: 'text/plain' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href     = url;
-    a.download = `${baseName}.txt`;
+    const blob = new Blob([extractedText], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${selectedFile.name.replace(/\.[^.]+$/, "")}.txt`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    showSnackbar('Downloaded as .txt', 'success');
-  }, [extractedText, selectedFile, showSnackbar]);
+  };
 
-  const handleFile = useCallback(
-    async (file: File) => {
-      const ext     = file.name.split('.').pop()?.toLowerCase() ?? '';
-      const allowed = ['pdf', 'docx', 'txt'];
-
-      if (!allowed.includes(ext)) {
-        showSnackbar(
-          `".${ext}" is not supported. Please upload a PDF, DOCX, or TXT.`,
-          'error'
-        );
-        return;
-      }
-      if (file.size > 50 * 1024 * 1024) {
-        showSnackbar('File is too large. Maximum is 50 MB.', 'error');
-        return;
-      }
-
-      ttsStopRef.current(); 
-      setSelectedFile(file);
-      setExtractedText('');
-      setCopied(false);
-
-      try {
-        showSnackbar(`Reading ${file.name}…`);
-        const text = await extract(file);
-        setExtractedText(text);
-        const words = text.split(/\s+/).filter(Boolean).length;
-        showSnackbar(
-          `Ready! ${words.toLocaleString()} words extracted.`,
-          'success'
-        );
-      } catch (err: unknown) {
-        const msg =
-          err instanceof Error ? err.message : 'Could not extract text.';
-        showSnackbar(msg, 'error');
-      }
-    },
-    [extract, showSnackbar] 
-  );
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(false);
-      const file = e.dataTransfer.files?.[0];
-      if (file) handleFile(file);
-    },
-    [handleFile]
-  );
-
-  const handleInputChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) handleFile(file);
-      e.target.value = '';
-    },
-    [handleFile]
-  );
-
-  const isExtracting = extractStatus === 'extracting';
-  const hasText      = extractedText.length > 0;
-  const wordCount    = hasText
-    ? extractedText.split(/\s+/).filter(Boolean).length
-    : 0;
+  const handleFile = async (file: File) => {
+    if (file.size > 50 * 1024 * 1024) return;
+    tts.stop();
+    setSelectedFile(file);
+    setExtractedText("");
+    setCopied(false);
+    try {
+      const text = await extract(file);
+      setExtractedText(text);
+    } catch {}
+  };
 
   if (mounted && !tts.isSupported) {
     return (
-      <main className="min-h-screen p-6 max-w-2xl mx-auto flex flex-col items-center justify-center gap-4">
-        <div
-          className="md3-shape-lg p-6 border text-center"
-          style={{
-            backgroundColor: 'var(--md-sys-color-error-container)',
-            borderColor: 'var(--md-sys-color-error)',
-            color: 'var(--md-sys-color-on-error-container)',
-          }}
-        >
-          <p className="md3-title-medium mb-2">⚠ Text-to-Speech not supported</p>
-          <p className="md3-body-medium">
-            Your browser doesn&apos;t support the Web Speech API.
-            Please use Chrome or Edge on Android.
-          </p>
+      <main className="min-h-screen flex items-center justify-center p-6">
+        <div className="m3-shape-lg p-6 m3-error max-w-sm text-center">
+          <p className="font-bold mb-2">TTS Not Supported</p>
+          <p className="text-sm opacity-80">Use Chrome or Edge.</p>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen relative flex flex-col items-center overflow-x-hidden">
-      
-      {/* ── Background Animations ─────────────────────────────────────── */}
-      <div className="absolute inset-0 -z-10 w-full h-full">
-        <Strands 
-          thickness={1} 
-          glow={3} 
-          amplitude={1} 
-          speed={0.4} 
-          waviness={1}
-          colors={['#006495', '#CBE6FF', '#50606E']} 
-        />
-      </div>
-
-      <div className="w-full p-4 md:p-8 max-w-3xl mx-auto flex flex-col gap-6 pb-28 relative z-10">
-      {/* ── Hero / Header ─────────────────────────────────────────────── */}
-      <header
-        className="md3-shape-expressive-xl p-10 mb-4 text-center flex flex-col items-center gap-4 transition-all"
-        style={{
-          backgroundColor: 'var(--md-sys-color-primary-container)',
-          color: 'var(--md-sys-color-on-primary-container)',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.05)',
-        }}
-      >
-        <SpeakingBlob status={tts.status} pitch={tts.pitch} rate={tts.rate} />
-        <h1 className="md3-display-medium mt-2">
-          Speech to Text
+    <main className="min-h-screen p-4 md:p-12 max-w-4xl mx-auto flex flex-col gap-8">
+      {/* Hero */}
+      <header className="text-center py-12 m3-shape-xl bg-indigo-50 dark:bg-zinc-900 shadow-sm border border-indigo-100 dark:border-zinc-800 transition-all">
+        <h1 className="text-5xl md:text-7xl font-extrabold tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-indigo-500 to-rose-400 mb-4">
+          Speechifier
         </h1>
-        <p className="md3-title-medium opacity-80 max-w-sm">
-          Listen to any PDF, DOCX, or TXT file offline on your device.
+        <p className="text-lg md:text-xl text-zinc-600 dark:text-zinc-400 font-medium tracking-tight">
+          Listen to PDF, DOCX, or TXT offline.
         </p>
       </header>
 
-      {/* ── Drop zone ─────────────────────────────────────────────────── */}
+      {/* Upload Zone */}
       <div
         role="button"
         tabIndex={0}
-        aria-label="Upload document"
-        onDragEnter={(e) => { e.preventDefault(); setIsDragging(true); }}
-        onDragOver={(e)  => { e.preventDefault(); setIsDragging(true); }}
+        onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
         onDragLeave={() => setIsDragging(false)}
-        onDrop={handleDrop}
+        onDrop={(e) => { e.preventDefault(); setIsDragging(false); const f = e.dataTransfer.files?.[0]; if (f) handleFile(f); }}
         onClick={() => !isExtracting && !selectedFile && inputRef.current?.click()}
-        onKeyDown={(e) => e.key === 'Enter' && !isExtracting && !selectedFile && inputRef.current?.click()}
-        className="md3-shape-expressive-lg p-10 flex flex-col items-center justify-center gap-4 transition-all"
-        style={{
-          border: isDragging
-            ? '2px dashed var(--md-sys-color-primary)'
-            : selectedFile 
-            ? '2px solid transparent'
-            : '2px dashed var(--md-sys-color-outline-variant)',
-          backgroundColor: isDragging
-            ? 'var(--md-sys-color-primary-container)'
-            : selectedFile
-            ? 'var(--md-sys-color-surface-container-low)'
-            : 'var(--md-sys-color-surface-container-lowest)',
-          minHeight: '200px',
-          cursor: selectedFile ? 'default' : 'pointer',
-          boxShadow: selectedFile ? '0 4px 16px rgba(0,0,0,0.03)' : 'none',
-        }}
+        className={`m3-shape-xl p-12 flex flex-col items-center justify-center gap-6 transition-all duration-500 cursor-pointer border-2
+          ${isDragging ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-950/20 scale-[1.02]" : selectedFile ? "border-transparent m3-surface-high cursor-default" : "border-dashed border-zinc-300 dark:border-zinc-700 m3-surface-low hover:border-indigo-400"}
+        `}
       >
-        <input
-          ref={inputRef}
-          type="file"
-          accept={ACCEPTED}
-          className="hidden"
-          onChange={handleInputChange}
-          disabled={isExtracting}
-          aria-hidden
-        />
-
+        <input ref={inputRef} type="file" accept={ACCEPTED} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if(f) handleFile(f); e.target.value=""; }} disabled={isExtracting} />
+        
         {isExtracting ? (
-          <>
-            <div
-              className="w-10 h-10 rounded-full border-[3px] animate-spin"
-              style={{
-                borderColor: 'var(--md-sys-color-primary)',
-                borderTopColor: 'transparent',
-              }}
-            />
-            <p className="md3-title-medium mt-2" style={{ color: 'var(--md-sys-color-on-surface)' }}>
-              Extracting text…
-            </p>
-          </>
+          <div className="flex flex-col items-center gap-4">
+            <M3LoadingIndicator size={64} color="#6366f1" />
+            <p className="text-indigo-600 dark:text-indigo-400 font-bold tracking-wide animate-pulse">Extracting...</p>
+          </div>
         ) : selectedFile && hasText ? (
-          <>
-            <div
-              className="p-4 md3-shape-full"
-              style={{
-                backgroundColor: 'var(--md-sys-color-primary-container)',
-                color: 'var(--md-sys-color-on-primary-container)',
-              }}
-            >
-              <DocumentIcon />
+          <div className="flex flex-col items-center gap-4 w-full">
+            <div className="p-5 rounded-[24px] bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400">
+              <RiFileTextLine size={48} />
             </div>
             <div className="text-center">
-              <p
-                className="md3-title-medium truncate max-w-xs"
-                style={{ color: 'var(--md-sys-color-on-surface)' }}
-              >
-                {selectedFile.name}
-              </p>
-              <p
-                className="md3-body-medium mt-1"
-                style={{ color: 'var(--md-sys-color-on-surface-variant)' }}
-              >
-                {wordCount.toLocaleString()} words loaded
-              </p>
+              <p className="text-xl font-bold text-zinc-900 dark:text-zinc-100 max-w-sm truncate">{selectedFile.name}</p>
+              <p className="text-zinc-500 mt-1 font-medium">{wordCount.toLocaleString()} words</p>
             </div>
-            
-            <div className="flex gap-3 mt-2">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  inputRef.current?.click();
-                }}
-                className="md3-tonal-button px-5 h-10"
-              >
-                Change File
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedFile(null);
-                  setExtractedText('');
-                  ttsStopRef.current();
-                }}
-                className="md3-outlined-button px-5 h-10"
-              >
-                Clear
-              </button>
+            <div className="flex gap-4 mt-4">
+              <button onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }} className="px-6 py-3 m3-shape-full m3-secondary font-bold">Change</button>
+              <button onClick={(e) => { e.stopPropagation(); setSelectedFile(null); setExtractedText(""); tts.stop(); }} className="px-6 py-3 m3-shape-full m3-surface-low border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-800 font-bold transition-colors">Clear</button>
             </div>
-          </>
+          </div>
         ) : (
-          <>
-            <div
-              className="p-4 md3-shape-full"
-              style={{
-                backgroundColor: 'var(--md-sys-color-surface-container-high)',
-                color: 'var(--md-sys-color-on-surface-variant)',
-              }}
-            >
-              <UploadIcon />
-            </div>
-            <p
-              className="md3-title-medium text-center"
-              style={{ color: 'var(--md-sys-color-on-surface)' }}
-            >
-              {isDragging ? 'Drop file here' : 'Tap to upload a document'}
-            </p>
-            <div className="flex gap-2 flex-wrap justify-center mt-1">
-              {['PDF', 'DOCX', 'TXT'].map((fmt) => (
-                <span
-                  key={fmt}
-                  className="md3-chip"
-                  style={{ fontSize: '0.8rem', height: '28px', padding: '0 12px' }}
-                >
-                  {fmt}
-                </span>
+          <div className="flex flex-col items-center gap-4 text-zinc-500 dark:text-zinc-400">
+            <RiUploadCloud2Line size={56} className="text-indigo-400" />
+            <p className="text-xl font-bold text-zinc-700 dark:text-zinc-300">Drop document or browse</p>
+            <div className="flex gap-2">
+              {["PDF", "DOCX", "TXT"].map(ext => (
+                <span key={ext} className="px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-full bg-zinc-200 dark:bg-zinc-800">{ext}</span>
               ))}
             </div>
-          </>
+          </div>
         )}
       </div>
 
-      {/* ── Text preview ──────────────────────────────────────────────── */}
+      {/* TTS Controls & Preview */}
       {hasText && (
-        <div
-          className="md3-shape-expressive-md"
-          style={{
-            backgroundColor: 'var(--md-sys-color-surface-container)',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
-          }}
-        >
-          {/* Header row */}
-          <div className="flex items-center justify-between px-4 pt-4 pb-2 gap-2">
-            <span
-              className="md3-label-large"
-              style={{ color: 'var(--md-sys-color-on-surface-variant)' }}
-            >
-              Extracted Text
-            </span>
-            <div className="flex items-center gap-2">
-              <span
-                className="md3-label-medium"
-                style={{ color: 'var(--md-sys-color-on-surface-variant)' }}
-              >
-                {wordCount.toLocaleString()} words
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* Controls */}
+          <div className="m3-shape-xl m3-surface-high p-8 flex flex-col gap-8">
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-extrabold tracking-tight">Playback</h2>
+              <span className={`px-3 py-1 text-sm font-bold uppercase tracking-wider rounded-full ${tts.status === 'playing' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400'}`}>
+                {tts.status}
               </span>
-              <button
-                onClick={handleCopy}
-                title="Copy text"
-                className="md3-icon-button"
-                aria-label="Copy extracted text"
-              >
-                {copied ? <CheckIcon /> : <CopyIcon />}
-              </button>
-              <button
-                onClick={handleDownload}
-                title="Download as .txt"
-                className="md3-icon-button"
-                aria-label="Download as text file"
-              >
-                <DownloadIcon />
-              </button>
+            </div>
+
+            <div className="flex gap-4 flex-wrap">
+              {(tts.status === 'idle' || tts.status === 'error' || tts.status === 'done') && (
+                <button onClick={() => tts.speak(extractedText)} className="flex-1 m3-primary m3-shape-full py-4 flex items-center justify-center gap-2 font-bold text-lg">
+                  <RiPlayFill size={24} /> Play
+                </button>
+              )}
+              {tts.status === 'playing' && (
+                <button onClick={tts.pause} className="flex-1 m3-secondary m3-shape-full py-4 flex items-center justify-center gap-2 font-bold text-lg">
+                  <RiPauseFill size={24} /> Pause
+                </button>
+              )}
+              {tts.status === 'paused' && (
+                <button onClick={tts.resume} className="flex-1 m3-primary m3-shape-full py-4 flex items-center justify-center gap-2 font-bold text-lg">
+                  <RiPlayFill size={24} /> Resume
+                </button>
+              )}
+              {(tts.status === 'playing' || tts.status === 'paused') && (
+                <button onClick={tts.stop} className="px-6 m3-surface-low border border-zinc-200 dark:border-zinc-700 m3-shape-full flex items-center justify-center hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors">
+                  <RiStopFill size={24} className="text-rose-500" />
+                </button>
+              )}
+            </div>
+
+            {/* Sliders */}
+            <div className="space-y-6">
+              <div>
+                <div className="flex justify-between text-sm font-bold text-zinc-600 dark:text-zinc-400 mb-2 uppercase tracking-wide">
+                  <span>Speed</span>
+                  <span className="text-indigo-500">{tts.rate.toFixed(1)}x</span>
+                </div>
+                <input type="range" min={0.5} max={2} step={0.1} value={tts.rate} onChange={(e) => tts.setRate(parseFloat(e.target.value))} className="w-full accent-indigo-500" />
+              </div>
+              <div>
+                <div className="flex justify-between text-sm font-bold text-zinc-600 dark:text-zinc-400 mb-2 uppercase tracking-wide">
+                  <span>Pitch</span>
+                  <span className="text-indigo-500">{tts.pitch.toFixed(1)}</span>
+                </div>
+                <input type="range" min={0.5} max={2} step={0.1} value={tts.pitch} onChange={(e) => tts.setPitch(parseFloat(e.target.value))} className="w-full accent-indigo-500" />
+              </div>
+            </div>
+
+            {/* Voice Select */}
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-bold text-zinc-600 dark:text-zinc-400 uppercase tracking-wide">Voice</label>
+              <select value={tts.selectedVoiceURI} onChange={(e) => tts.setSelectedVoiceURI(e.target.value)} className="m3-shape-lg bg-zinc-100 dark:bg-zinc-800 p-4 font-medium outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow">
+                {tts.voices.length === 0 ? <option value="">System Default</option> : tts.voices.map(v => <option key={v.voiceURI} value={v.voiceURI}>{v.name} ({v.lang})</option>)}
+              </select>
             </div>
           </div>
-          <div
-            className="px-4 pb-4 md3-body-large overflow-y-auto"
-            style={{
-              maxHeight: '240px',
-              color: 'var(--md-sys-color-on-surface)',
-              whiteSpace: 'pre-wrap',
-              lineHeight: '1.7',
-            }}
-          >
-            {extractedText}
+
+          {/* Text Preview */}
+          <div className="m3-shape-xl m3-surface-high p-8 flex flex-col max-h-[600px]">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-extrabold tracking-tight">Text</h2>
+              <div className="flex gap-2">
+                <button onClick={handleCopy} className="p-2 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors" title="Copy">
+                  {copied ? <RiCheckLine className="text-emerald-500" /> : <RiFileCopyLine />}
+                </button>
+                <button onClick={handleDownload} className="p-2 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors" title="Download">
+                  <RiDownloadLine />
+                </button>
+              </div>
+            </div>
+            <div className="overflow-y-auto text-lg leading-relaxed text-zinc-700 dark:text-zinc-300 font-medium p-4 bg-zinc-50 dark:bg-zinc-900/50 m3-shape-lg flex-1 whitespace-pre-wrap">
+              {extractedText}
+            </div>
           </div>
         </div>
       )}
-
-      {/* ── TTS Controls ──────────────────────────────────────────────── */}
-      {hasText && (
-        <TTSControls
-          status={tts.status}
-          progress={tts.progress}
-          rate={tts.rate}
-          pitch={tts.pitch}
-          errorMsg={tts.errorMsg}
-          voices={tts.voices}
-          selectedVoiceURI={tts.selectedVoiceURI}
-          onPlay={() => tts.speak(extractedText)}
-          onPause={tts.pause}
-          onResume={tts.resume}
-          onStop={tts.stop}
-          onRateChange={tts.setRate}
-          onPitchChange={tts.setPitch}
-          onVoiceChange={tts.setSelectedVoiceURI}
-          disabled={!hasText}
-        />
-      )}
-
-      {/* ── Snackbars ─────────────────────────────────────────────────── */}
-      {snackbars.map((sb, idx) => (
-        <Snackbar
-          key={sb.id}
-          item={sb}
-          stackOffset={snackbars.length - 1 - idx}
-          onDismiss={dismissSnackbar}
-        />
-      ))}
-      </div>
     </main>
-  );
-}
-
-/* ── SVG Icons ──────────────────────────────────────────────────────────── */
-function UploadIcon() {
-  return (
-    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-      <polyline points="17 8 12 3 7 8" />
-      <line x1="12" y1="3" x2="12" y2="15" />
-    </svg>
-  );
-}
-function DocumentIcon() {
-  return (
-    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-      <line x1="16" y1="13" x2="8" y2="13" />
-      <line x1="16" y1="17" x2="8" y2="17" />
-    </svg>
-  );
-}
-function CopyIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-    </svg>
-  );
-}
-function CheckIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  );
-}
-function DownloadIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-      <polyline points="7 10 12 15 17 10" />
-      <line x1="12" y1="15" x2="12" y2="3" />
-    </svg>
   );
 }
