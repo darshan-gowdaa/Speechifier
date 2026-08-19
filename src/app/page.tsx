@@ -111,12 +111,6 @@ export default function Home() {
               By @darshan-gowdaa
             </a>
           </nav>
-
-          <button onClick={() => inputRef.current?.click()} className="v-btn bg-white text-black hover:bg-gray-200 transition-colors header-cta appear appear--scale" style={{ "--d": "0.34s" } as React.CSSProperties}>Upload</button>
-
-          <button className="burger appear appear--scale" aria-expanded={menuOpen} style={{ "--d": "0.34s" } as React.CSSProperties} onClick={() => setMenuOpen(!menuOpen)}>
-            <span></span><span></span><span></span>
-          </button>
         </header>
 
         <main className="v-hero" id="top">
@@ -245,19 +239,6 @@ export default function Home() {
           </div>
         </main>
 
-        <div className="footer-wrapper">
-          <footer className="stats">
-            <div className="stat appear appear--stat" style={{ "--d": "1.12s" } as React.CSSProperties}>
-              100% local processing
-            </div>
-            <div className="stat appear appear--stat" style={{ "--d": "1.28s" } as React.CSSProperties}>
-              No cloud required
-            </div>
-            <div className="stat appear appear--stat" style={{ "--d": "1.44s" } as React.CSSProperties}>
-              Multiple voices & speeds
-            </div>
-          </footer>
-        </div>
       </div>
     </div>
   );
