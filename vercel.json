@@ -1,6 +1,4 @@
 {
-  "name": "speechifier-app",
-  "alias": ["speechifier-app.vercel.app"],
   "headers": [
     {
       "source": "/(.*)",

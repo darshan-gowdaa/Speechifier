@@ -27,6 +27,8 @@ interface TTSProps {
 
 interface Props {
   text: string;
+  fileName?: string;
+  fileType?: string;
   tts: TTSProps;
   onClose: () => void;
 }
