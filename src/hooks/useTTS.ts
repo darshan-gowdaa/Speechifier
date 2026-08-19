@@ -164,6 +164,18 @@ export function useTTS() {
     setTimeout(() => { stoppedRef.current = false; prepFn(); }, 100);
   }, []);
 
+  const applySettingChange = useCallback(() => {
+    if (status === 'playing') {
+      cancelSpeech(); stoppedRef.current = false;
+      if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
+      restartTimeoutRef.current = setTimeout(() => speakChunk(chunkIndexRef.current, currentCharIndexRef.current), 150);
+    }
+  }, [status, speakChunk]);
+
+  const setRate = useCallback((newRate: number) => { _setRate(newRate); rateRef.current = newRate; applySettingChange(); }, [applySettingChange]);
+  const setPitch = useCallback((newPitch: number) => { _setPitch(newPitch); pitchRef.current = newPitch; applySettingChange(); }, [applySettingChange]);
+  const setSelectedVoiceURI = useCallback((newURI: string) => { _setSelectedVoiceURI(newURI); voiceURIRef.current = newURI; applySettingChange(); }, [applySettingChange]);
+
   const speak = useCallback((text: string) => {
     if (!hasTTS()) return (setStatus('error'), setErrorMsg('Not supported.'));
     if (!text.trim()) return;
@@ -201,18 +213,6 @@ export function useTTS() {
       restartTimeoutRef.current = setTimeout(() => { cancelSpeech(); stoppedRef.current = false; setTimeout(() => speakChunk(targetIndex), 50); }, 400); // wait for slider stop
     }
   }, [status, speakChunk]);
-
-  const applySettingChange = useCallback(() => {
-    if (status === 'playing') {
-      cancelSpeech(); stoppedRef.current = false;
-      if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
-      restartTimeoutRef.current = setTimeout(() => speakChunk(chunkIndexRef.current, currentCharIndexRef.current), 150);
-    }
-  }, [status, speakChunk]);
-
-  const setRate = useCallback((newRate: number) => { _setRate(newRate); rateRef.current = newRate; applySettingChange(); }, [applySettingChange]);
-  const setPitch = useCallback((newPitch: number) => { _setPitch(newPitch); pitchRef.current = newPitch; applySettingChange(); }, [applySettingChange]);
-  const setSelectedVoiceURI = useCallback((newURI: string) => { _setSelectedVoiceURI(newURI); voiceURIRef.current = newURI; applySettingChange(); }, [applySettingChange]);
 
   // load voices
   useEffect(() => {
