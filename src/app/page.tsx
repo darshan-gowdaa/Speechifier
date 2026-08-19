@@ -20,6 +20,7 @@ export default function Home() {
   const [extractedText, setExtractedText] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   const { status: extractStatus, error: extractError, extract } = useDocumentExtractor();
   const tts = useTTS();
@@ -28,6 +29,27 @@ export default function Home() {
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setMounted(true), []);
+
+  // Mobile browsers block autoplay unless video is muted and playsinline is set.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.defaultMuted = true;
+    video.muted = true;
+    video.play().catch(() => {});
+
+    const handleTouch = () => {
+      if (video && video.paused) {
+        video.play().catch(() => {});
+      }
+    };
+    window.addEventListener("touchstart", handleTouch, { once: true });
+    window.addEventListener("click", handleTouch, { once: true });
+    return () => {
+      window.removeEventListener("touchstart", handleTouch);
+      window.removeEventListener("click", handleTouch);
+    };
+  }, []);
 
   useEffect(() => {
     if (menuOpen) document.body.classList.add('menu-open');
@@ -92,7 +114,7 @@ export default function Home() {
     >
       <div className="grain"></div>
       <div className={`hero-video-wrapper transition-opacity duration-300 ${isDragging ? 'opacity-30' : 'opacity-100'}`}>
-        <video className="hero-photo anim-fade-in" autoPlay loop muted playsInline>
+        <video ref={videoRef} className="hero-photo anim-fade-in" autoPlay loop muted playsInline preload="auto">
           <source src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260813_115057_94c3699b-0fd1-4124-bcf3-3626bb8c1f77.mp4" type="video/mp4" />
         </video>
       </div>
