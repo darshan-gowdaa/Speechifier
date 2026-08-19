@@ -27,6 +27,14 @@ export default function Home() {
   const { status: extractStatus, extract } = useDocumentExtractor();
   const tts = useTTS();
 
+  // Surface TTS errors into snackbar automatically
+  useEffect(() => {
+    if (tts.status === 'error' && tts.errorMsg) {
+      showSnackbar(tts.errorMsg, 'error');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tts.status, tts.errorMsg]);
+
   // Bug 7 fix: stable ref to tts.stop so handleFile doesn't need tts in deps
   const ttsStopRef = useRef(tts.stop);
   useEffect(() => { ttsStopRef.current = tts.stop; }, [tts.stop]);
@@ -364,6 +372,7 @@ export default function Home() {
           progress={tts.progress}
           rate={tts.rate}
           pitch={tts.pitch}
+          errorMsg={tts.errorMsg}
           voices={tts.voices}
           selectedVoiceURI={tts.selectedVoiceURI}
           onPlay={() => tts.speak(extractedText)}

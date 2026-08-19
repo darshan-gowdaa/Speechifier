@@ -1,7 +1,9 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: var(--font-roboto), Roboto, system-ui, sans-serif;
+  /* Google Sans is pre-installed on all Android devices.
+     Falls back to Roboto (Google Fonts) on desktop/other. */
+  --font-sans: 'Google Sans', 'Roboto', system-ui, sans-serif;
   --color-primary: var(--md-sys-color-primary);
   --color-on-primary: var(--md-sys-color-on-primary);
   --color-primary-container: var(--md-sys-color-primary-container);
@@ -237,4 +239,15 @@ body {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
   }
+}
+
+@keyframes tts-indeterminate {
+  0%   { transform: scaleX(0.1); margin-left: 0%; }
+  50%  { transform: scaleX(0.6); margin-left: 25%; }
+  100% { transform: scaleX(0.1); margin-left: 100%; }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }

@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 
-export type TTSStatus = 'idle' | 'playing' | 'paused' | 'done' | 'error';
+export type TTSStatus = 'idle' | 'preparing' | 'playing' | 'paused' | 'done' | 'error';
 
 export interface TTSVoice {
   name: string;
@@ -8,111 +8,185 @@ export interface TTSVoice {
   voiceURI: string;
 }
 
+// Module-level strong reference prevents Android GC bug that kills utterances
+// eslint-disable-next-line prefer-const
+let _currentUtterance: SpeechSynthesisUtterance | null = null;
+
+/** Split text into chunks ≤ maxWords words so Android Chrome doesn't silently fail */
+function chunkText(text: string, maxWords = 120): string[] {
+  // Split on sentence boundaries first for natural pauses
+  const sentences = text.match(/[^.!?\n]+[.!?\n]*/g) ?? [text];
+  const chunks: string[] = [];
+  let current = '';
+
+  for (const sentence of sentences) {
+    const prospective = (current + sentence).trim();
+    if (prospective.split(/\s+/).length > maxWords && current.trim()) {
+      chunks.push(current.trim());
+      current = sentence;
+    } else {
+      current += sentence;
+    }
+  }
+  if (current.trim()) chunks.push(current.trim());
+  return chunks.filter(Boolean);
+}
+
 export function useTTS() {
-  // Bug 1 fix: isSupported computed client-side only, starts false to match SSR
-  const [isSupported, setIsSupported] = useState(false);
-  const [status, setStatus] = useState<TTSStatus>('idle');
-  const [voices, setVoices] = useState<TTSVoice[]>([]);
+  const [isSupported, setIsSupported]         = useState(false);
+  const [status, setStatus]                   = useState<TTSStatus>('idle');
+  const [errorMsg, setErrorMsg]               = useState('');
+  const [voices, setVoices]                   = useState<TTSVoice[]>([]);
   const [selectedVoiceURI, setSelectedVoiceURI] = useState('');
-  const [rate, setRate] = useState(1);
-  const [pitch, setPitch] = useState(1);
-  const [progress, setProgress] = useState(0);
+  const [rate, setRate]                       = useState(1);
+  const [pitch, setPitch]                     = useState(1);
+  const [progress, setProgress]               = useState(0);
 
-  // Bug 3 fix: track whether default voice has been set, avoids dep cycle
-  const defaultVoiceSetRef = useRef(false);
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const defaultVoiceSetRef  = useRef(false);
+  const chunksRef           = useRef<string[]>([]);
+  const chunkIndexRef       = useRef(0);
+  const stoppedRef          = useRef(false); // user manually stopped — abort chain
+  const rateRef             = useRef(rate);
+  const pitchRef            = useRef(pitch);
+  const voiceURIRef         = useRef(selectedVoiceURI);
 
-  // Bug 1 & 2 fix: all window access inside useEffect (client only)
+  // Keep voice/rate/pitch refs current without re-creating speak()
+  useEffect(() => { rateRef.current  = rate;            }, [rate]);
+  useEffect(() => { pitchRef.current = pitch;           }, [pitch]);
+  useEffect(() => { voiceURIRef.current = selectedVoiceURI; }, [selectedVoiceURI]);
+
+  // ── Load voices ───────────────────────────────────────────────────────────
   useEffect(() => {
     if (!('speechSynthesis' in window)) return;
     setIsSupported(true);
 
-    const loadVoices = () => {
+    const load = () => {
       const available = window.speechSynthesis.getVoices();
-      if (available.length === 0) return;
-
-      const mapped: TTSVoice[] = available.map((v) => ({
-        name: v.name,
-        lang: v.lang,
-        voiceURI: v.voiceURI,
+      if (!available.length) return;
+      const mapped = available.map((v) => ({
+        name: v.name, lang: v.lang, voiceURI: v.voiceURI,
       }));
       setVoices(mapped);
-
-      // Set default to first English voice, but only once
       if (!defaultVoiceSetRef.current) {
         defaultVoiceSetRef.current = true;
-        const english = mapped.find((v) => v.lang.startsWith('en'));
-        if (english) setSelectedVoiceURI(english.voiceURI);
+        const eng = mapped.find((v) => v.lang.startsWith('en'));
+        if (eng) setSelectedVoiceURI(eng.voiceURI);
       }
     };
 
-    loadVoices();
-    window.speechSynthesis.addEventListener('voiceschanged', loadVoices);
+    load();
+    window.speechSynthesis.addEventListener('voiceschanged', load);
     return () => {
-      window.speechSynthesis.removeEventListener('voiceschanged', loadVoices);
+      window.speechSynthesis.removeEventListener('voiceschanged', load);
       window.speechSynthesis.cancel();
+      _currentUtterance = null;
     };
-  }, []); // stable: no external deps needed
+  }, []);
 
-  const speak = useCallback(
-    (text: string) => {
-      if (!('speechSynthesis' in window)) return;
+  // ── Speak one chunk ───────────────────────────────────────────────────────
+  const speakChunk = useCallback((index: number) => {
+    if (stoppedRef.current) return;
+    const chunks = chunksRef.current;
+    if (index >= chunks.length) {
+      setStatus('done');
+      setProgress(100);
+      _currentUtterance = null;
+      return;
+    }
 
-      window.speechSynthesis.cancel();
+    const text      = chunks[index];
+    const utterance = new SpeechSynthesisUtterance(text);
+    _currentUtterance = utterance; // strong module-level ref prevents GC
 
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = rate;
-      utterance.pitch = pitch;
+    utterance.rate  = rateRef.current;
+    utterance.pitch = pitchRef.current;
 
-      const allVoices = window.speechSynthesis.getVoices();
-      const voice = allVoices.find((v) => v.voiceURI === selectedVoiceURI);
-      if (voice) utterance.voice = voice;
+    const allVoices = window.speechSynthesis.getVoices();
+    const voice     = allVoices.find((v) => v.voiceURI === voiceURIRef.current);
+    if (voice) utterance.voice = voice;
 
-      utterance.onstart = () => setStatus('playing');
-      utterance.onend = () => {
-        setStatus('done');
-        setProgress(100);
-      };
-      utterance.onerror = (e) => {
-        // 'interrupted' fires on cancel() — not a real error
-        if (e.error !== 'interrupted' && e.error !== 'canceled') {
-          setStatus('error');
-        }
-      };
-      utterance.onboundary = (e) => {
-        if (e.name === 'word' && text.length > 0) {
-          setProgress(Math.round((e.charIndex / text.length) * 100));
-        }
-      };
+    utterance.onstart = () => {
+      if (!stoppedRef.current) setStatus('playing');
+    };
 
-      utteranceRef.current = utterance;
-      setStatus('playing');
-      setProgress(0);
-      window.speechSynthesis.speak(utterance);
-    },
-    [rate, pitch, selectedVoiceURI]
-  );
+    utterance.onend = () => {
+      if (stoppedRef.current) return;
+      const pct = Math.round(((index + 1) / chunks.length) * 100);
+      setProgress(pct);
+      // Small gap between chunks (Android fix)
+      setTimeout(() => speakChunk(index + 1), 50);
+    };
 
-  // Bug 4 note: Android Chrome pause() is often a no-op — best-effort
+    utterance.onerror = (e) => {
+      if (stoppedRef.current) return;
+      if (e.error === 'interrupted' || e.error === 'canceled') return;
+      setStatus('error');
+      setErrorMsg(`Speech error: ${e.error}. Try a shorter document or a different browser.`);
+      _currentUtterance = null;
+    };
+
+    chunkIndexRef.current = index;
+    window.speechSynthesis.speak(utterance);
+  }, []); // stable — reads from refs
+
+  // ── Public: speak ─────────────────────────────────────────────────────────
+  const speak = useCallback((text: string) => {
+    if (!('speechSynthesis' in window)) {
+      setStatus('error');
+      setErrorMsg('Speech synthesis is not supported in this browser.');
+      return;
+    }
+    if (!text.trim()) {
+      setStatus('error');
+      setErrorMsg('No text to read.');
+      return;
+    }
+
+    // Cancel any in-flight speech first
+    stoppedRef.current = true;
+    window.speechSynthesis.cancel();
+    _currentUtterance  = null;
+
+    setStatus('preparing');
+    setProgress(0);
+    setErrorMsg('');
+
+    // Android fix: small delay after cancel() before speaking
+    setTimeout(() => {
+      stoppedRef.current    = false;
+      const chunks          = chunkText(text, 120);
+      chunksRef.current     = chunks;
+      chunkIndexRef.current = 0;
+      speakChunk(0);
+    }, 150);
+  }, [speakChunk]);
+
+  // ── Pause ─────────────────────────────────────────────────────────────────
   const pause = useCallback(() => {
     window.speechSynthesis.pause();
     setStatus('paused');
   }, []);
 
+  // ── Resume ────────────────────────────────────────────────────────────────
   const resume = useCallback(() => {
     window.speechSynthesis.resume();
     setStatus('playing');
   }, []);
 
+  // ── Stop ──────────────────────────────────────────────────────────────────
   const stop = useCallback(() => {
+    stoppedRef.current = true;
     window.speechSynthesis.cancel();
+    _currentUtterance  = null;
     setStatus('idle');
     setProgress(0);
+    setErrorMsg('');
   }, []);
 
   return {
     isSupported,
     status,
+    errorMsg,
     voices,
     selectedVoiceURI,
     setSelectedVoiceURI,
