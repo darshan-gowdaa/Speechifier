@@ -51,9 +51,9 @@ Built with Next.js and native Web Speech API <br /> <br />
 
 # About The Project
 
-Speechifier: modern, privacy-focused text-to-speech app. Leverages native Web Speech API, processes documents locally — data never leaves device.
+Speechifier is a modern, privacy-first text-to-speech web application engineered for seamless document listening directly in your browser. By utilizing the native Web Speech API alongside Web Workers, Speechifier parses PDF, DOCX, and raw text files entirely on your local device—ensuring your sensitive documents never get uploaded to any external server. 
 
-Unlike cloud-based TTS services, built for instant offline use. Handles document parsing in browser, gives highly customizable playback: speed, pitch, voice selection.
+Unlike traditional cloud-dependent text-to-speech services, Speechifier is built for instant offline usage with zero latency. It features automatic language detection, intelligent prosody-aware text chunking to prevent browser speech synthesis timeouts, custom playback controls (pitch, rate, and voice selection), background thread persistence, and an interactive real-time canvas audio visualizer.
 
 ## Key Features
 - **100% Offline Processing** — no server uploads, all parsing local
