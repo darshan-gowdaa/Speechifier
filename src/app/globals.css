@@ -36,6 +36,8 @@ body {
   background: #000000;
   color: #ffffff;
   min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
   overflow-x: hidden;
 }
 
@@ -56,7 +58,7 @@ body {
   height: 100dvh;
   z-index: 0;
   pointer-events: none;
-  background: radial-gradient(circle at 50% 30%, #1e1b4b 0%, #0f172a 50%, #000000 100%);
+  background: #000;
   transform: translateZ(0);
   -webkit-transform: translateZ(0);
 }
@@ -83,8 +85,8 @@ body {
 .vesper-root .page {
   position: relative; z-index: 1;
   display: flex; flex-direction: column;
-  height: 100%;
-  overflow: hidden;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .vesper-header  { flex-shrink: 0; }
@@ -269,8 +271,7 @@ body.menu-open .burger span:nth-child(3) { transform: translateY(-6.5px) rotate(
 }
 
 @media (max-width:900px) {
-  .vesper-root { height:auto; overflow-y:auto; overflow-x:hidden; }
-  .vesper-root .page { height:auto; min-height:100dvh; overflow:visible; }
+  .vesper-root .page { overflow:visible; }
   .v-hero { overflow:visible; }
   .vesper-header { grid-template-columns:1fr auto auto; gap:8px; padding-top:env(safe-area-inset-top); }
   .logo,.header-cta,.burger { z-index:80; }

@@ -48,7 +48,7 @@ export default function Home() {
       
       <HeroVideo isDragging={isDragging} />
 
-      <div className="page flex flex-col min-h-screen">
+      <div className="page flex flex-col w-full">
         <div className="menu-backdrop"></div>
         <SiteHeader
           hasFile={!!selectedFile}
