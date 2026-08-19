@@ -33,7 +33,10 @@ interface Props {
 }
 
 export function PDFViewer({ file, extractedText, tts, onClose }: Props) {
-  const [zoom, setZoom] = useState(1.25);
+  const [zoom, setZoom] = useState(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 768) return 0.6;
+    return 1.25;
+  });
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {

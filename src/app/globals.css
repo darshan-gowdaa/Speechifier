@@ -312,14 +312,14 @@ body.menu-open .burger span:nth-child(3) { transform: translateY(-6.5px) rotate(
   display: flex;
   flex-direction: column;
   min-width: 0;
-  height: 100%;
+  min-height: 0;
   overflow: hidden;
 }
 
 .reader-sidebar {
-  width: 320px;
+  width: 300px;
   flex-shrink: 0;
-  background: #111;
+  background: rgba(13,13,13,0.95);
   border-left: 1px solid rgba(255,255,255,0.07);
   display: flex;
   flex-direction: column;
@@ -328,13 +328,11 @@ body.menu-open .burger span:nth-child(3) { transform: translateY(-6.5px) rotate(
   overflow-y: auto;
 }
 
+/* On mobile, reader-body needs bottom padding for the fixed toolbar */
 @media (max-width: 767px) {
-  .reader-sidebar {
-    width: 100%;
-    max-height: 400px;
-    border-left: none;
-    border-top: 1px solid rgba(255,255,255,0.1);
-  }
+  .reader-overlay { flex-direction: column; }
+  .reader-body { padding-bottom: 80px !important; }
+  .pdf-scroll-area { padding-bottom: 80px !important; }
 }
 
 .reader-toolbar {

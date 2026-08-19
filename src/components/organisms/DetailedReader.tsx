@@ -35,7 +35,10 @@ interface Props {
 
 const TagMap = { p: "p", heading1: "h1", heading2: "h2", heading3: "h3", code: "code", blockquote: "blockquote", listitem: "li", blank: "div" } as const;
 
-export function DetailedReader({ text, tts, onClose }: Props) {  const [zoom, setZoom] = useState(1.0);
+export function DetailedReader({ text, tts, onClose }: Props) {  const [zoom, setZoom] = useState(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 768) return 0.85;
+    return 1.0;
+  });
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
