@@ -1,26 +1,30 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  --color-surface: var(--color-blue-950);
+  --color-surface-high: var(--color-blue-900);
+  --color-surface-highest: var(--color-blue-800);
+  --color-primary: var(--color-blue-400);
+  --color-on-primary: var(--color-blue-950);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  body {
+    @apply bg-blue-950 text-blue-50 antialiased min-h-screen selection:bg-blue-500/30;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer utilities {
+  .md3-card {
+    @apply bg-blue-900/50 backdrop-blur-xl border border-blue-800/50 rounded-3xl p-6 shadow-lg shadow-blue-950/50;
+  }
+  .md3-button {
+    @apply rounded-full bg-blue-600 text-white font-medium px-6 py-3 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-500/20 active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2;
+  }
+  .md3-button-outline {
+    @apply rounded-full border border-blue-500/30 text-blue-300 font-medium px-6 py-3 transition-all duration-300 hover:-translate-y-1 hover:bg-blue-500/10 active:scale-[0.97] flex items-center justify-center gap-2;
+  }
+  .md3-heading {
+    @apply text-4xl md:text-5xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-br from-white to-blue-300;
+  }
 }
