@@ -4,6 +4,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useDocumentExtractor } from '../hooks/useDocumentExtractor';
 import { useTTS } from '../hooks/useTTS';
 import { TTSControls } from '../components/TTSControls';
+import { SpeakingBlob } from '../components/SpeakingBlob';
 import { Snackbar, type SnackbarItem } from '../components/Snackbar';
 
 const ACCEPTED =
@@ -174,18 +175,7 @@ export default function Home() {
           color: 'var(--md-sys-color-on-primary-container)',
         }}
       >
-        <div
-          className="p-3 md3-shape-full"
-          style={{
-            backgroundColor: 'var(--md-sys-color-primary)',
-            color: 'var(--md-sys-color-on-primary)',
-          }}
-        >
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
-            <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
-          </svg>
-        </div>
+        <SpeakingBlob status={tts.status} pitch={tts.pitch} rate={tts.rate} />
         <h1 className="md3-display-large" style={{ fontWeight: 500, letterSpacing: '-0.02em' }}>
           Speech to Text
         </h1>

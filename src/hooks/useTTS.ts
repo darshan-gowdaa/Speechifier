@@ -62,19 +62,39 @@ export function useTTS() {
 
     const load = () => {
       const available = window.speechSynthesis.getVoices();
-      if (!available.length) return;
+      if (!available.length) return false;
       const mapped = available.map((v) => ({
         name: v.name, lang: v.lang, voiceURI: v.voiceURI,
       }));
+      // Sort to prioritize english voices at the top
+      mapped.sort((a, b) => a.lang.localeCompare(b.lang));
       setVoices(mapped);
+      
       if (!defaultVoiceSetRef.current) {
         defaultVoiceSetRef.current = true;
         const eng = mapped.find((v) => v.lang.startsWith('en'));
         if (eng) setSelectedVoiceURI(eng.voiceURI);
+        else if (mapped[0]) setSelectedVoiceURI(mapped[0].voiceURI);
       }
+      return true;
     };
 
-    load();
+    // Initial attempt
+    if (!load()) {
+      // Android/Chrome bug: getVoices() is often empty at first and voiceschanged doesn't reliably fire
+      const poll = setInterval(() => {
+        if (load()) clearInterval(poll);
+      }, 500);
+      window.speechSynthesis.addEventListener('voiceschanged', load);
+      
+      return () => {
+        clearInterval(poll);
+        window.speechSynthesis.removeEventListener('voiceschanged', load);
+        window.speechSynthesis.cancel();
+        _currentUtterance = null;
+      };
+    }
+
     window.speechSynthesis.addEventListener('voiceschanged', load);
     return () => {
       window.speechSynthesis.removeEventListener('voiceschanged', load);

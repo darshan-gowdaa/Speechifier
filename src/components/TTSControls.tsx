@@ -179,29 +179,33 @@ export function TTSControls({
       {/* ── Settings ─────────────────────────────────────────────────── */}
       <div className={`grid grid-cols-1 gap-4 md:grid-cols-3 transition-opacity ${isBusy ? 'opacity-50 pointer-events-none' : ''}`}>
 
-        {voices.length > 0 && (
-          <div className="flex flex-col gap-1 md:col-span-1">
-            <label className="md3-label-medium" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
-              Voice
-            </label>
-            <select
-              value={selectedVoiceURI}
-              onChange={(e) => onVoiceChange(e.target.value)}
-              className="md3-shape-sm md3-body-medium px-3 py-2 border outline-none"
-              style={{
-                backgroundColor: 'var(--md-sys-color-surface-container-low)',
-                borderColor: 'var(--md-sys-color-outline)',
-                color: 'var(--md-sys-color-on-surface)',
-              }}
-            >
-              {voices.map((v) => (
+        <div className="flex flex-col gap-1 md:col-span-1">
+          <label className="md3-label-medium" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
+            Voice
+          </label>
+          <select
+            value={selectedVoiceURI}
+            onChange={(e) => onVoiceChange(e.target.value)}
+            disabled={voices.length === 0}
+            className="md3-shape-sm md3-body-medium px-3 py-2 border outline-none truncate"
+            style={{
+              backgroundColor: 'var(--md-sys-color-surface-container-low)',
+              borderColor: 'var(--md-sys-color-outline)',
+              color: 'var(--md-sys-color-on-surface)',
+              opacity: voices.length === 0 ? 0.7 : 1
+            }}
+          >
+            {voices.length === 0 ? (
+              <option value="">System Default Voice</option>
+            ) : (
+              voices.map((v) => (
                 <option key={v.voiceURI} value={v.voiceURI}>
                   {v.name} ({v.lang})
                 </option>
-              ))}
-            </select>
-          </div>
-        )}
+              ))
+            )}
+          </select>
+        </div>
 
         <div className="flex flex-col gap-1">
           <label className="md3-label-medium flex justify-between" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
